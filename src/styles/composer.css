@@ -1,0 +1,450 @@
+.composer-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.composer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-sm);
+  transition: box-shadow var(--t) var(--ease);
+}
+
+.composer:focus-within {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ink) 26%, transparent),
+    var(--shadow-md);
+}
+
+.composer-input {
+  display: block;
+  width: 100%;
+  min-height: 60px;
+  max-height: 168px;
+  margin: 0;
+  padding: 16px 18px 6px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.composer-input::placeholder {
+  color: var(--ink-3);
+}
+
+.composer-wrap.is-compact .composer-input {
+  min-height: 30px;
+  padding: 14px 16px 4px;
+  font-size: 15px;
+}
+
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 10px 10px;
+}
+
+.composer-toolbar-start,
+.composer-toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.composer-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  color: var(--ink-2);
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+
+.composer-toolbar-start .composer-icon-btn {
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.composer-icon-btn:hover:not(:disabled) {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.composer-icon-btn:disabled {
+  opacity: 0.35;
+}
+
+.composer-mic-btn.is-listening {
+  background: var(--bad-wash);
+  color: var(--bad);
+  animation: mic-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--bad-wash);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.composer-send {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: var(--accent);
+  color: var(--on-accent);
+  transition:
+    background-color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease),
+    opacity var(--t-fast) var(--ease);
+}
+
+.composer-send:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.composer-send:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.composer-send.is-idle {
+  background: color-mix(in srgb, var(--accent) 38%, var(--surface));
+}
+
+.composer-send:disabled {
+  opacity: 0.55;
+}
+
+/* Effort selector */
+
+.composer-effort {
+  position: relative;
+}
+
+.composer-effort-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px 0 9px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+
+.composer-effort-trigger:hover:not(.is-locked),
+.composer-effort-trigger[aria-expanded="true"] {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.composer-effort-trigger.is-locked {
+  cursor: default;
+  padding-right: 10px;
+}
+
+.composer-effort-trigger .icon {
+  color: var(--ink-3);
+}
+
+.composer-effort-chevron {
+  color: var(--ink-3);
+  transition: transform var(--t) var(--ease);
+}
+
+.composer-effort-chevron.is-up {
+  transform: rotate(180deg);
+}
+
+.composer-effort-popover {
+  position: absolute;
+  z-index: var(--z-menu);
+  right: 0;
+  bottom: calc(100% + 10px);
+  width: 288px;
+  padding: 14px 16px 12px;
+  border-radius: 14px;
+  background: var(--surface-raised);
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-md);
+  transform-origin: bottom right;
+  animation: pop-in var(--t) var(--ease-out);
+}
+
+.composer-effort-detail-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.composer-effort-detail-desc {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.composer-effort-track {
+  position: relative;
+  height: 28px;
+  margin-top: 14px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.composer-effort-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: var(--r-pill);
+  background: var(--wash-strong);
+}
+
+.composer-effort-track-fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  transition: width var(--t) var(--ease);
+}
+
+.composer-effort-track.is-dragging .composer-effort-track-fill {
+  transition: none;
+}
+
+.composer-effort-ticks {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+  pointer-events: none;
+}
+
+.composer-effort-tick {
+  display: grid;
+  place-items: center;
+}
+
+.composer-effort-tick-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  box-shadow: 0 0 0 1.5px var(--line-strong);
+}
+
+.composer-effort-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-sm);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.composer-effort-track.is-dragging .composer-effort-grip {
+  transform: scale(1.12);
+}
+
+.composer-effort-grip i {
+  width: 1.5px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--ink-3);
+}
+
+.composer-effort-drag-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* Status, attachments, agent pill */
+
+.composer-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 10px 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--warn-wash);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.composer-status .icon {
+  margin-top: 1px;
+  color: var(--warn);
+}
+
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 14px 0;
+}
+
+.composer-attachment {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 56px;
+  min-width: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.composer-attachment img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+}
+
+.composer-attachment-name {
+  max-width: 240px;
+  padding: 0 32px 0 12px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-attachment button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 82%, transparent);
+  color: var(--paper);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.composer-agent-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 10px 0;
+  padding: 6px 6px 6px 7px;
+  border-radius: 12px;
+  background: var(--accent-wash);
+  animation: rise-in var(--t) var(--ease-out);
+}
+
+.composer-agent-pill-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.composer-agent-pill-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.composer-agent-pill-text strong {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.composer-agent-pill-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.composer-agent-pill-clear {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  color: var(--ink-2);
+}
+
+.composer-agent-pill-clear:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+@media (max-width: 560px) {
+  .composer {
+    border-radius: 18px;
+  }
+
+  .composer-input {
+    font-size: 16px;
+  }
+
+  .composer-wrap.is-compact .composer-input {
+    font-size: 16px;
+  }
+
+  .composer-agent-pill-meta {
+    display: none;
+  }
+
+  .composer-effort-popover {
+    right: -44px;
+    width: min(288px, calc(100vw - 32px));
+  }
+}

@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Profile photos: users/{uid}/profile/avatar-<timestamp>.<ext>
+    match /users/{uid}/profile/{fileName} {
+      // Signed-in users can see avatars (shown to teammates in the app).
+      allow read: if request.auth != null;
+
+      // Only the owner can upload: images only, under 5 MB, avatar-* names.
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && fileName.matches('avatar-[0-9]+\\.(png|jpg|webp|gif)')
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(png|jpeg|webp|gif)');
+
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Everything else is closed.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

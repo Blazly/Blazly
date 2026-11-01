@@ -1,0 +1,468 @@
+.onboard {
+  height: 100dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 22px 24px 72px;
+  background: var(--paper);
+}
+
+.onboard-top {
+  width: min(960px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: clamp(28px, 7vh, 72px);
+}
+
+.onboard-top .brand-logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.onboard-sheet {
+  width: min(640px, 100%);
+  animation: rise-in var(--t-slow) var(--ease-out);
+}
+
+.onboard-sheet.is-wide {
+  width: min(960px, 100%);
+}
+
+.onboard-sheet.is-in-app {
+  width: 100%;
+}
+
+.onboard-sheet.is-in-app:not(.is-wide) {
+  max-width: 640px;
+}
+
+.onboard-kicker {
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.onboard-progress {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0 28px;
+}
+
+.onboard-progress span {
+  flex: 1;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: var(--wash-strong);
+  transition: background-color var(--t-slow) var(--ease);
+}
+
+.onboard-progress span.is-on {
+  background: var(--accent);
+}
+
+.onboard-sheet h1 {
+  font-family: var(--font-serif);
+  font-size: clamp(28px, 3.6vw, 36px);
+  font-weight: 400;
+  line-height: 1.14;
+  letter-spacing: -0.022em;
+}
+
+.onboard-lead {
+  margin-top: 10px;
+  max-width: 58ch;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.setup-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 28px;
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-xs);
+}
+
+.setup-mark {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--accent-wash);
+  color: var(--accent-text);
+}
+
+.setup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setup-field span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.setup-field input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  font-size: 14.5px;
+  transition: box-shadow var(--t-fast) var(--ease);
+}
+
+.setup-field input::placeholder {
+  color: var(--ink-3);
+}
+
+.setup-field input:focus {
+  box-shadow: inset 0 0 0 1px var(--accent), var(--focus-ring);
+}
+
+.onboard-note {
+  margin-top: 24px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.collect {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.collect span {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.onboard-error {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bad-wash);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--bad);
+}
+
+.onboard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.onboard-secondary,
+.onboard-continue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color var(--t-fast) var(--ease);
+}
+
+.onboard-secondary {
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.onboard-secondary:hover:not(:disabled) {
+  background: var(--wash);
+}
+
+.onboard-continue {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.onboard-continue:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 86%, var(--paper));
+}
+
+.onboard-continue:disabled,
+.onboard-secondary:disabled {
+  opacity: 0.55;
+}
+
+/* Analyzing */
+
+.analyze-panel {
+  position: relative;
+  height: min(460px, 54vh);
+  margin-top: 24px;
+  padding-top: 38px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-sm);
+}
+
+.analyze-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 38px;
+  border-bottom: 1px solid var(--line);
+  background:
+    radial-gradient(circle at 20px 19px, var(--line-strong) 0 4.5px, transparent 5px),
+    radial-gradient(circle at 37px 19px, var(--line-strong) 0 4.5px, transparent 5px),
+    radial-gradient(circle at 54px 19px, var(--line-strong) 0 4.5px, transparent 5px),
+    var(--paper-sunk);
+}
+
+.analyze-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+
+.analyze-fetching {
+  position: absolute;
+  inset: 38px 0 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  font-size: 14px;
+  color: var(--ink-3);
+}
+
+.analyze-panel.is-busy::after {
+  content: "";
+  position: absolute;
+  top: 37px;
+  left: 0;
+  z-index: 2;
+  width: 36%;
+  height: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  animation: onboard-scan 1.4s ease-in-out infinite;
+}
+
+@keyframes onboard-scan {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+
+/* Review */
+
+.review {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin-top: 24px;
+}
+
+.review-nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.review-nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  font-size: 13.5px;
+  color: var(--ink-2);
+  text-align: left;
+  white-space: nowrap;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+
+.review-nav button:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.review-nav button.is-current {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 500;
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-xs);
+}
+
+.review-panel {
+  min-height: 380px;
+  padding: 18px 20px 22px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-xs);
+}
+
+.review-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.review-panel h2 {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.review-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.review-edit:hover {
+  background: var(--wash);
+}
+
+.review-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.review-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-field > span {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.review-field p {
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.review-field input,
+.review-field textarea,
+.review-list-edit {
+  width: 100%;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.review-field input:focus,
+.review-field textarea:focus,
+.review-list-edit:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent), var(--focus-ring);
+}
+
+.review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.review-list li {
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.review-list li:first-child {
+  border-top: 0;
+}
+
+.review-empty {
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+
+@media (max-width: 760px) {
+  .onboard {
+    padding: 18px 16px 56px;
+  }
+
+  .setup-card {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-mark {
+    grid-row: auto;
+  }
+
+  .review {
+    grid-template-columns: 1fr;
+  }
+
+  .review-nav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .onboard-actions {
+    flex-direction: column-reverse;
+  }
+
+  .onboard-continue,
+  .onboard-secondary {
+    width: 100%;
+  }
+}

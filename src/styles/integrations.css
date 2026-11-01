@@ -1,0 +1,459 @@
+.integration-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.integration-card {
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-xs);
+  overflow: hidden;
+}
+
+.integration-card.is-connected {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--good) 35%, var(--line)), var(--shadow-xs);
+}
+
+.integration-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.integration-card-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.integration-card-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.integration-card-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.integration-card-sub {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.integration-pill {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+  background: var(--wash);
+}
+
+.integration-pill.is-on {
+  color: var(--good);
+  background: var(--good-wash);
+}
+
+.integration-card-body {
+  padding: 16px 18px 18px;
+}
+
+.integration-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.integration-form > .btn {
+  align-self: flex-start;
+}
+
+.integration-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink-2);
+}
+
+.integration-field input,
+.integration-field select,
+.wp-quick-row input {
+  height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.integration-field input:focus,
+.integration-field select:focus,
+.wp-quick-row input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--focus-ring);
+}
+
+.integration-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.integration-help {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.integration-help code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.integration-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bad);
+}
+
+.integration-muted {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.integration-notice {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  font-size: 13.5px;
+}
+
+.integration-notice.is-success {
+  color: var(--good);
+  background: var(--good-wash);
+}
+
+.integration-notice.is-error {
+  color: var(--bad);
+  background: var(--bad-wash);
+}
+
+.integration-actions {
+  display: inline-flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.integration-secret {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--ink);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.integration-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.integration-code {
+  margin: 0;
+  max-height: 360px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  overflow: auto;
+}
+
+.integration-google-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.wp-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wp-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: wp;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.wp-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  counter-increment: wp;
+}
+
+.wp-steps li::before {
+  content: counter(wp);
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--accent-wash);
+}
+
+.wp-quick-row {
+  display: flex;
+  gap: 8px;
+}
+
+.wp-quick-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.wp-manual-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.wp-manual-toggle:hover {
+  color: var(--ink);
+}
+
+.webhook-nontech {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-md, 10px);
+  background: var(--accent-wash);
+  color: var(--accent-text);
+}
+
+.webhook-nontech p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.webhook-nontech .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .wp-quick-row {
+    flex-direction: column;
+  }
+}
+
+/* Connect AI tools */
+
+.connect-ai-card {
+  display: flex;
+  flex-direction: column;
+  margin: 20px 0 28px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-xs);
+}
+
+.connect-ai-step {
+  display: flex;
+  gap: 14px;
+  padding: 20px 22px;
+}
+
+.connect-ai-step + .connect-ai-step {
+  border-top: 1px solid var(--line);
+}
+
+.connect-ai-num {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--accent-wash);
+}
+
+.connect-ai-step-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.connect-ai-step-body h2 {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.connect-ai-step-body .integration-help {
+  margin: 0;
+}
+
+.connect-ai-newkey {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  background: var(--accent-wash);
+}
+
+.connect-ai-newkey p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent-text);
+}
+
+.connect-ai-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.connect-ai-tab {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--wash);
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.connect-ai-tab:hover {
+  color: var(--ink);
+}
+
+.connect-ai-tab.is-active {
+  color: var(--surface);
+  background: var(--ink);
+}
+
+.connect-ai-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.connect-ai-steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+
+.connect-ai-code {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.connect-ai-code pre {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink);
+  white-space: pre;
+}
+
+.connect-ai-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.connect-ai-tools code {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+  background: var(--wash);
+}

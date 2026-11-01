@@ -1,0 +1,17 @@
+node_modules
+dist
+.reels
+.integrations
+.DS_Store
+.env
+.env.*
+!.env.example
+.schedules
+.mcp-keys
+
+# local-only
+site-audit
+backup-before-redesign
+src\ copy
+.cursor
+*.pem

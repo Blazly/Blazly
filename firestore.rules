@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /credits/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+      match /transactions/{txId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+    }
+    match /referrals/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+    match /referralCodes/{code} {
+      allow read, write: if false;
+    }
+    match /referralClaims/{userId} {
+      allow read, write: if false;
+    }
+    match /communityPosts/{postId=**} {
+      allow read, write: if false;
+    }
+    match /teams/{ownerId} {
+      allow read, write: if false;
+    }
+    match /teamInvites/{tokenHash} {
+      allow read, write: if false;
+    }
+    match /projectRegistry/{userId} {
+      allow read, write: if false;
+    }
+    // Public share pages: anyone can read, but the document must not carry the owner's user ID.
+    match /sharedChats/{shareId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && !("ownerUid" in request.resource.data)
+        && getAfter(/databases/$(database)/documents/sharedChatOwners/$(shareId)).data.ownerUid == request.auth.uid;
+      allow update: if request.auth != null
+        && !("ownerUid" in request.resource.data)
+        && getAfter(/databases/$(database)/documents/sharedChatOwners/$(shareId)).data.ownerUid == request.auth.uid;
+      allow delete: if request.auth != null
+        && get(/databases/$(database)/documents/sharedChatOwners/$(shareId)).data.ownerUid == request.auth.uid;
+    }
+    // Private: only the owner can see who owns a share.
+    match /sharedChatOwners/{shareId} {
+      allow read: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid;
+    }
+  }
+}
