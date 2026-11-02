@@ -12,7 +12,7 @@ export const PLANS = {
     seats: 1,
     topupPer100: null,
     aiChainSteps: 2,
-    limits: { agentRunsPerHour: 15, agentRunsPerDay: 60, chatPerHour: 60, mcpPerMinute: 0, activeSchedules: 0 },
+    limits: { agentRunsPerHour: 15, agentRunsPerDay: 60, chatPerHour: 60, mcpPerMinute: 0, activeSchedules: 0, concurrentJobs: 2 },
     features: [
       "500 one-time credits, no card required",
       "AI mode and manual mode",
@@ -46,7 +46,7 @@ export const PLANS = {
     seats: 1,
     topupPer100: 2,
     aiChainSteps: 4,
-    limits: { agentRunsPerHour: 60, agentRunsPerDay: 400, chatPerHour: 300, mcpPerMinute: 60, activeSchedules: 20 },
+    limits: { agentRunsPerHour: 60, agentRunsPerDay: 400, chatPerHour: 300, mcpPerMinute: 60, activeSchedules: 20, concurrentJobs: 5 },
     popular: true,
     features: [
       "Everything in Free, plus:",
@@ -79,7 +79,7 @@ export const PLANS = {
     seats: 3,
     topupPer100: 1.8,
     aiChainSteps: 4,
-    limits: { agentRunsPerHour: 200, agentRunsPerDay: 1500, chatPerHour: 1000, mcpPerMinute: 120, activeSchedules: 100 },
+    limits: { agentRunsPerHour: 200, agentRunsPerDay: 1500, chatPerHour: 1000, mcpPerMinute: 120, activeSchedules: 100, concurrentJobs: 15 },
     features: [
       "Everything in Pro, plus:",
       "5,500 credits every month (unused credits roll over)",

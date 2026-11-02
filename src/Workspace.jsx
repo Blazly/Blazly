@@ -171,6 +171,7 @@ import {
   saveImportedRunIds,
 } from "./schedulesClient.js";
 import { useAuth } from "./AuthContext.jsx";
+import { ackJobs, CONNECTION_LOST_STATUS, fetchPendingJobs, isConnectionError, setJobContext } from "./jobsClient.js";
 import { saveProject } from "./firebase.js";
 
 const MODES = ["Auto", "Fast", "Deep"];
@@ -747,6 +748,79 @@ export function Workspace() {
     };
   }, [user?.uid, scheduleRefresh]);
 
+  // Agents keep running on the server after the tab closes or the network drops; pull finished results into chats.
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    let cancelled = false;
+    let inFlight = false;
+    async function importBackgroundJobs() {
+      if (inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
+      try {
+        const jobs = (await fetchPendingJobs()).filter((job) => job.status === "done" || job.status === "failed");
+        if (cancelled || !jobs.length) return;
+        setChats((current) => {
+          let next = [...current];
+          for (const job of jobs) {
+            const reply =
+              job.status === "done"
+                ? job.content
+                : `This task couldn't finish: ${job.error || "unknown error"}`;
+            const idx = next.findIndex((chat) => chat.id === job.chatId);
+            if (idx >= 0) {
+              const chat = next[idx];
+              const existing = chat.messages || [];
+              const last = existing.at(-1);
+              const needsUser = !(last?.role === "user" && (last.content || "").trim() === (job.userText || "").trim());
+              const messages = [
+                ...existing,
+                ...(needsUser && job.userText ? [{ role: "user", content: job.userText }] : []),
+                { role: "assistant", content: reply },
+              ];
+              next[idx] = { ...chat, messages, agent: chat.agent || job.agentId || null, updatedAt: Date.now() };
+              if (activeChatIdRef.current === chat.id) setMessages(messages);
+            } else {
+              next = [
+                {
+                  id: job.chatId || `job_${job.id}`,
+                  title: defaultChatTitle(job.userText || "Background task"),
+                  project: job.project || project,
+                  scope,
+                  mode,
+                  agent: job.agentId || null,
+                  interactionMode: WORKSPACE_MODES.manual,
+                  messages: [
+                    ...(job.userText ? [{ role: "user", content: job.userText }] : []),
+                    { role: "assistant", content: reply },
+                  ],
+                  updatedAt: Date.now(),
+                },
+                ...next,
+              ];
+            }
+          }
+          saveChats(user.uid, next);
+          return next;
+        });
+        await ackJobs(jobs.map((job) => job.id));
+      } catch {
+        // Try again on the next tick.
+      } finally {
+        inFlight = false;
+      }
+    }
+    importBackgroundJobs();
+    const timer = setInterval(importBackgroundJobs, 20_000);
+    window.addEventListener("online", importBackgroundJobs);
+    document.addEventListener("visibilitychange", importBackgroundJobs);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener("online", importBackgroundJobs);
+      document.removeEventListener("visibilitychange", importBackgroundJobs);
+    };
+  }, [user?.uid]);
+
   function chooseProject(next) {
     if (next !== project) {
       const openChat = chats.find((chat) => chat.id === activeChatIdRef.current);
@@ -1215,6 +1289,7 @@ export function Workspace() {
     }
 
     const dispatchAgent = aiDispatchAgentId || pendingAgent;
+    setJobContext({ chatId: activeChatIdRef.current, agentId: dispatchAgent, project });
     const agentEngaged = (id) =>
       dispatchAgent === id || pendingAgent === id || chatAgentRecord === id;
     const mergeAiIntro = (reply) => (aiIntroPending ? `${aiIntroPending}\n\n${reply}` : reply);
@@ -1883,8 +1958,13 @@ export function Workspace() {
       }
       setMessages(history.slice(0, -1));
       if (!fromAction) setPrompt(draft);
-      setStatus(err.message || (siteAuditUrl ? "Site audit failed." : "Blazly could not reply."));
+      setStatus(
+        isConnectionError(err) && !navigator.onLine
+          ? CONNECTION_LOST_STATUS
+          : err.message || (siteAuditUrl ? "Site audit failed." : "Blazly could not reply."),
+      );
     } finally {
+      setJobContext(null);
       setAuditProgress(null);
       setBlogProgress(null);
       setHumanizeProgress(null);

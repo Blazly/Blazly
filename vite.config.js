@@ -23,6 +23,7 @@ import { attachScheduler } from "./server/scheduler/routes.js";
 import { attachPublicMcp } from "./server/publicMcp/routes.js";
 import { attachEmailOtp } from "./server/emailOtp.js";
 import { attachCredits } from "./server/credits/middleware.js";
+import { attachJobRelay } from "./server/jobs/relay.js";
 import { attachBilling } from "./server/billing/routes.js";
 import { attachReferrals } from "./server/referrals.js";
 import { attachCommunity } from "./server/community.js";
@@ -101,6 +102,7 @@ export default defineConfig(({ mode }) => {
           attachReferrals(server);
           attachCommunity(server);
           attachAccountRoutes(server);
+          attachJobRelay(server);
           attachCredits(server);
           attachAnalyze(server, env.GEMINI_API_KEY);
           const dataForSeo = {
@@ -164,6 +166,7 @@ export default defineConfig(({ mode }) => {
           attachReferrals(server);
           attachCommunity(server);
           attachAccountRoutes(server);
+          attachJobRelay(server);
           attachCredits(server);
           attachAnalyze(server, env.GEMINI_API_KEY);
           const dataForSeo = {

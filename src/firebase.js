@@ -38,6 +38,12 @@ export function installAuthFetch() {
         // Fall through without a token; the server will ask the user to sign in.
       }
     }
+    const job = window.__blazlyJobContext;
+    if (job && (init.method || "GET").toUpperCase() === "POST") {
+      if (job.chatId) headers.set("X-Blazly-Chat", String(job.chatId));
+      if (job.agentId) headers.set("X-Blazly-Agent", String(job.agentId));
+      if (job.project) headers.set("X-Blazly-Project", String(job.project));
+    }
     const response = await original(input, { ...init, headers });
     if (response.status === 402 || (response.ok && CREDIT_PATHS.some((p) => url.includes(p)))) {
       window.dispatchEvent(new CustomEvent("blazly:credits-changed"));
