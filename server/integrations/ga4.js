@@ -58,3 +58,9 @@ export async function ga4RunReport(uid, project, propertyId, options = {}) {
     rowCount: data.rowCount || 0,
   };
 }
+
+/** Website URLs of a property's web data streams (used to match a GA4 property to the project site). */
+export async function listGa4StreamUrls(uid, project, propertyId) {
+  const data = await googleFetch(uid, project, `${ADMIN}/properties/${propertyId}/dataStreams?pageSize=50`);
+  return (data.dataStreams || []).map((s) => s.webStreamData?.defaultUri || "").filter(Boolean);
+}

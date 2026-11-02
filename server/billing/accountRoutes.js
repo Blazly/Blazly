@@ -1,7 +1,9 @@
 import { readJson } from "../readJson.js";
 import { identify } from "../credits/middleware.js";
 import { requestOrigin } from "../integrations/http.js";
-import { ensureProject, removeProject, syncProjects } from "./projects.js";
+import { describeProjects, editProject, ensureProject, removeProject, syncProjects } from "./projects.js";
+import { deleteProjectIntegrations, renameProjectIntegrations, setProvider } from "../integrations/store.js";
+import { renameKeysProject } from "../publicMcp/keys.js";
 import { acceptInvite, getTeam, inviteMember, leaveTeam, removeMember } from "./team.js";
 
 function sendJson(res, status, body) {
@@ -58,14 +60,32 @@ const ROUTES = {
     await leaveTeam(who.uid);
     return { ok: true };
   },
-  "POST /api/projects/sync": (who, body) => syncProjects(who.uid, body.names),
+  "GET /api/projects": (who) => describeProjects(who.uid),
+  "POST /api/projects/sync": (who, body) => syncProjects(who.uid, body.projects || body.names),
   "POST /api/projects/add": async (who, body) => {
-    await ensureProject(who.uid, body.name);
+    await ensureProject(who.uid, body.name, body.website);
     return { ok: true };
   },
   "POST /api/projects/remove": async (who, body) => {
-    await removeProject(who.uid, body.name);
+    await removeProject(who.uid, body.name); // paid plans only
+    await deleteProjectIntegrations(who.uid, String(body.name || ""));
     return { ok: true };
+  },
+  "POST /api/projects/edit": async (who, body) => {
+    const result = await editProject(who.uid, { from: body.from, to: body.to, website: body.website });
+    if (!result.unchanged) {
+      if (result.name !== String(body.from || "").trim()) {
+        await renameProjectIntegrations(who.uid, String(body.from || ""), result.name);
+        await renameKeysProject(who.uid, String(body.from || ""), result.name);
+      }
+      if (result.websiteChanged) {
+        // Connections were bound to the old URL; they must be re-made against the new site.
+        for (const provider of ["wordpress", "webflow", "webhook", "google"]) {
+          await setProvider(who.uid, result.name, provider, null);
+        }
+      }
+    }
+    return result;
   },
 };
 
@@ -80,7 +100,7 @@ export function attachAccountRoutes(server) {
       const body = req.method === "POST" ? await readJson(req) : {};
       return sendJson(res, 200, await handler(who, body, req));
     } catch (error) {
-      return sendJson(res, error.status || 500, { error: error.message || "Request failed.", code: error.code });
+      return sendJson(res, error.status || 500, { error: error.message || "Request failed.", code: error.code, nextEditAt: error.nextEditAt, requiredPlan: error.requiredPlan, limit: error.limit });
     }
   });
 }

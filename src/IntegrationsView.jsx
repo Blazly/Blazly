@@ -52,7 +52,15 @@ app.post("/api/blazly", express.raw({ type: "application/json" }), async (req, r
   res.status(400).json({ error: "Unknown event" });
 });`;
 
-export function IntegrationsView({ uid, project, notice }) {
+function hostOf(url) {
+  try {
+    return new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname.replace(/^www\./, "");
+  } catch {
+    return String(url || "");
+  }
+}
+
+export function IntegrationsView({ uid, project, website, notice }) {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -81,30 +89,38 @@ export function IntegrationsView({ uid, project, notice }) {
           <h1>Integrations</h1>
           <p className="subpage-lead">
             Connect <strong>{project}</strong>’s website and analytics. Agents use these connections to publish posts and
-            pull real Search Console and GA4 data. Each project has its own connections.
+            pull real Search Console and GA4 data. Each project has its own connections, and they only ever connect to this
+            project’s website{website ? <> — <strong>{hostOf(website)}</strong></> : null}.
           </p>
         </div>
       </header>
 
       {notice ? <p className={`integration-notice is-${notice.tone}`}>{notice.text}</p> : null}
       {error ? <p className="integration-notice is-error">{error}</p> : null}
+      {!website ? (
+        <p className="integration-notice is-error">
+          This project has no website yet. Add one under Projects → Edit before connecting integrations.
+        </p>
+      ) : null}
 
       {loading && !status ? (
         <p className="integration-muted">Loading connections…</p>
       ) : status ? (
         <div className="integration-list">
-          <WordPressCard uid={uid} project={project} status={status.wordpress} onChange={setStatus} />
+          <WordPressCard uid={uid} project={project} website={website} status={status.wordpress} onChange={setStatus} />
           <WebflowCard
             uid={uid}
             project={project}
+            website={website}
             status={status.webflow || { connected: false }}
             configured={status.webflowConfigured}
             onChange={setStatus}
           />
-          <WebhookCard uid={uid} project={project} status={status.webhook || { connected: false }} onChange={setStatus} />
+          <WebhookCard uid={uid} project={project} website={website} status={status.webhook || { connected: false }} onChange={setStatus} />
           <GoogleCard
             uid={uid}
             project={project}
+            website={website}
             status={status.google}
             configured={status.googleConfigured}
             onChange={setStatus}
@@ -133,8 +149,8 @@ function IntegrationShell({ icon, title, subtitle, connected, children }) {
   );
 }
 
-function WordPressCard({ uid, project, status, onChange }) {
-  const [siteUrl, setSiteUrl] = useState("");
+function WordPressCard({ uid, project, website, status, onChange }) {
+  const siteUrl = website || "";
   const [username, setUsername] = useState("");
   const [appPassword, setAppPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -146,7 +162,7 @@ function WordPressCard({ uid, project, status, onChange }) {
     setBusy(true);
     setError("");
     try {
-      await startWordPressApproval({ uid, project, siteUrl });
+      await startWordPressApproval({ uid, project });
     } catch (err) {
       setError(err.message);
       setBusy(false);
@@ -158,7 +174,7 @@ function WordPressCard({ uid, project, status, onChange }) {
     setBusy(true);
     setError("");
     try {
-      onChange(await connectWordPress({ uid, project, siteUrl, username, appPassword }));
+      onChange(await connectWordPress({ uid, project, username, appPassword }));
       setAppPassword("");
     } catch (err) {
       setError(err.message);
@@ -198,21 +214,15 @@ function WordPressCard({ uid, project, status, onChange }) {
         <div className="integration-form">
           <form className="wp-quick" onSubmit={approve}>
             <ol className="wp-steps">
-              <li>Enter your site address</li>
+              <li>We’ll open <strong>{hostOf(siteUrl) || "your project website"}</strong></li>
               <li>Log in to WordPress if asked</li>
               <li>
                 Click <strong>Yes, I approve of this connection</strong>
               </li>
             </ol>
             <div className="wp-quick-row">
-              <input
-                value={siteUrl}
-                onChange={(e) => setSiteUrl(e.target.value)}
-                placeholder="yourblog.com"
-                aria-label="WordPress site URL"
-                required
-              />
-              <button type="submit" className="btn btn-primary" disabled={busy}>
+              <input value={siteUrl} readOnly aria-label="WordPress site URL" title="Integrations connect only to this project’s website" />
+              <button type="submit" className="btn btn-primary" disabled={busy || !siteUrl}>
                 {busy ? "Opening WordPress…" : "Connect with WordPress"}
               </button>
             </div>
@@ -232,7 +242,7 @@ function WordPressCard({ uid, project, status, onChange }) {
         <form className="integration-form" onSubmit={submit}>
           <label className="integration-field">
             <span>Site URL</span>
-            <input value={siteUrl} onChange={(e) => setSiteUrl(e.target.value)} placeholder="https://yourblog.com" required />
+            <input value={siteUrl} readOnly />
           </label>
           <label className="integration-field">
             <span>Username</span>
@@ -254,7 +264,7 @@ function WordPressCard({ uid, project, status, onChange }) {
             it here. Use an Author, Editor, or Administrator account.
           </p>
           {error ? <p className="integration-error">{error}</p> : null}
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          <button type="submit" className="btn btn-primary" disabled={busy || !siteUrl}>
             {busy ? "Testing connection…" : "Connect WordPress"}
           </button>
         </form>
@@ -265,8 +275,9 @@ function WordPressCard({ uid, project, status, onChange }) {
   );
 }
 
-function WebflowCard({ uid, project, status, configured, onChange }) {
+function WebflowCard({ uid, project, website, status, configured, onChange }) {
   const [sites, setSites] = useState(null);
+  const [matchedSiteId, setMatchedSiteId] = useState("");
   const [collections, setCollections] = useState(null);
   const [siteId, setSiteId] = useState(status.siteId || "");
   const [collectionId, setCollectionId] = useState(status.collectionId || "");
@@ -278,7 +289,12 @@ function WebflowCard({ uid, project, status, configured, onChange }) {
     if (!status.connected) return;
     let cancelled = false;
     fetchWebflowSites(uid, project)
-      .then((data) => !cancelled && setSites(data.sites))
+      .then((data) => {
+        if (cancelled) return;
+        setSites(data.sites);
+        setMatchedSiteId(data.matchedSiteId || "");
+        setSiteId(data.matchedSiteId || "");
+      })
       .catch((err) => !cancelled && setError(err.message));
     return () => {
       cancelled = true;
@@ -286,9 +302,9 @@ function WebflowCard({ uid, project, status, configured, onChange }) {
   }, [status.connected, uid, project]);
 
   useEffect(() => {
-    setSiteId(status.siteId || "");
     setCollectionId(status.collectionId || "");
-  }, [status.siteId, status.collectionId]);
+  }, [status.collectionId]);
+  const matchedSite = (sites || []).find((s) => s.id === matchedSiteId) || null;
 
   useEffect(() => {
     if (!status.connected || !siteId) {
@@ -380,18 +396,24 @@ function WebflowCard({ uid, project, status, configured, onChange }) {
               Disconnect
             </button>
           </div>
-          <label className="integration-field">
+          <div className="integration-field">
             <span>Site</span>
-            <select value={siteId} onChange={(e) => setSiteId(e.target.value)} disabled={!sites}>
-              <option value="">{sites ? "Select a site" : "Loading…"}</option>
-              {(sites || []).map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                  {s.domains[0] ? ` · ${s.domains[0]}` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+            {!sites ? (
+              <p className="integration-help">Looking for {hostOf(website)} in your Webflow workspace…</p>
+            ) : matchedSite ? (
+              <p className="integration-help">
+                <strong>{matchedSite.name}</strong>
+                {matchedSite.domains[0] ? ` · ${matchedSite.domains[0]}` : ""} — matches this project’s website.
+              </p>
+            ) : (
+              <p className="integration-error">
+                Your project website ({hostOf(website)}) doesn’t match any site in this Webflow account
+                {sites.length ? ` (${sites.length} site${sites.length === 1 ? "" : "s"} found)` : ""}. Connect the Webflow
+                account that owns {hostOf(website)}, or update the project website.
+              </p>
+            )}
+          </div>
+          {matchedSite ? (
           <label className="integration-field">
             <span>Blog collection</span>
             <select value={collectionId} onChange={(e) => setCollectionId(e.target.value)} disabled={!collections}>
@@ -403,6 +425,7 @@ function WebflowCard({ uid, project, status, configured, onChange }) {
               ))}
             </select>
           </label>
+          ) : null}
           {mapping ? (
             <p className="integration-help">
               Body → <code>{mapping.body || "none found"}</code> · Summary → <code>{mapping.summary || "none"}</code> · Image →{" "}
@@ -413,12 +436,12 @@ function WebflowCard({ uid, project, status, configured, onChange }) {
             </p>
           ) : null}
           <p className="integration-help">
-            If your site isn’t listed, reconnect and make sure you authorize that site or workspace in Webflow.
+            If the site isn’t found, reconnect and make sure you authorize the workspace that owns {hostOf(website)}.
           </p>
           {error ? <p className="integration-error">{error}</p> : null}
           <div className="integration-row">
             <span className="integration-muted">{mapping ? "Saved." : ""}</span>
-            <button type="button" className="btn btn-primary" disabled={busy || !siteId || !collectionId} onClick={save}>
+            <button type="button" className="btn btn-primary" disabled={busy || !matchedSite || !collectionId} onClick={save}>
               {busy ? "Saving…" : "Save collection"}
             </button>
           </div>
@@ -450,9 +473,9 @@ function developerEmailHref({ project, endpointUrl, siteUrl, secret }) {
   return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
-function WebhookCard({ uid, project, status, onChange }) {
+function WebhookCard({ uid, project, website, status, onChange }) {
   const [endpointUrl, setEndpointUrl] = useState(status.endpointUrl || "");
-  const [siteUrl, setSiteUrl] = useState(status.siteUrl || "");
+  const siteUrl = website || "";
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
@@ -460,8 +483,7 @@ function WebhookCard({ uid, project, status, onChange }) {
 
   useEffect(() => {
     setEndpointUrl(status.endpointUrl || "");
-    setSiteUrl(status.siteUrl || "");
-  }, [status.endpointUrl, status.siteUrl]);
+  }, [status.endpointUrl]);
 
   async function run(kind, fn) {
     setBusy(kind);
@@ -477,7 +499,7 @@ function WebhookCard({ uid, project, status, onChange }) {
 
   function save(event, rotateSecret = false) {
     event?.preventDefault();
-    run("save", () => saveWebhook({ uid, project, endpointUrl, siteUrl, rotateSecret }));
+    run("save", () => saveWebhook({ uid, project, endpointUrl, rotateSecret }));
   }
 
   async function copy(label, text) {
@@ -514,13 +536,10 @@ function WebhookCard({ uid, project, status, onChange }) {
           <input
             value={endpointUrl}
             onChange={(e) => setEndpointUrl(e.target.value)}
-            placeholder="https://yoursite.com/api/blazly"
+            placeholder={`https://${hostOf(siteUrl) || "yoursite.com"}/api/blazly`}
             required
           />
-        </label>
-        <label className="integration-field">
-          <span>Site URL (optional)</span>
-          <input value={siteUrl} onChange={(e) => setSiteUrl(e.target.value)} placeholder="https://yoursite.com" />
+          <p className="integration-help">Must be on this project’s website ({hostOf(siteUrl) || "add a website first"}) or one of its subdomains.</p>
         </label>
 
         {status.configured ? (
@@ -609,23 +628,22 @@ function WebhookCard({ uid, project, status, onChange }) {
   );
 }
 
-function GoogleCard({ uid, project, status, configured, onChange }) {
-  const [props, setProps] = useState(null);
-  const [gscSiteUrl, setGscSiteUrl] = useState(status.gscSiteUrl || "");
-  const [ga4PropertyId, setGa4PropertyId] = useState(status.ga4PropertyId || "");
+function GoogleCard({ uid, project, website, status, configured, onChange }) {
+  const [match, setMatch] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    if (!status.connected) return;
+  const loadMatch = useCallback(() => {
+    if (!status.connected) return undefined;
     let cancelled = false;
+    setMatch(null);
     fetchGoogleProperties(uid, project)
       .then((data) => {
         if (cancelled) return;
-        setProps(data);
+        setMatch(data);
+        if (data.status) onChange(data.status);
         const errs = [data.errors?.gsc, data.errors?.ga4].filter(Boolean);
-        if (errs.length) setError(errs.join(" · "));
+        setError(errs.join(" · "));
       })
       .catch((err) => !cancelled && setError(err.message));
     return () => {
@@ -633,27 +651,14 @@ function GoogleCard({ uid, project, status, configured, onChange }) {
     };
   }, [status.connected, uid, project]);
 
-  useEffect(() => {
-    setGscSiteUrl(status.gscSiteUrl || "");
-    setGa4PropertyId(status.ga4PropertyId || "");
-  }, [status.gscSiteUrl, status.ga4PropertyId]);
+  useEffect(() => loadMatch(), [loadMatch]);
 
-  async function save() {
+  async function recheck() {
     setBusy(true);
     setError("");
-    setSaved(false);
     try {
-      const ga4 = props?.ga4Properties?.find((p) => p.propertyId === ga4PropertyId);
-      onChange(
-        await selectGoogleProperties({
-          uid,
-          project,
-          gscSiteUrl,
-          ga4PropertyId,
-          ga4PropertyName: ga4?.displayName || "",
-        }),
-      );
-      setSaved(true);
+      onChange(await selectGoogleProperties({ uid, project }));
+      loadMatch();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -665,7 +670,7 @@ function GoogleCard({ uid, project, status, configured, onChange }) {
     setBusy(true);
     try {
       onChange(await disconnectIntegration({ uid, project, provider: "google" }));
-      setProps(null);
+      setMatch(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -700,33 +705,47 @@ function GoogleCard({ uid, project, status, configured, onChange }) {
               Disconnect
             </button>
           </div>
-          <label className="integration-field">
+          <div className="integration-field">
             <span>Search Console property</span>
-            <select value={gscSiteUrl} onChange={(e) => setGscSiteUrl(e.target.value)} disabled={!props}>
-              <option value="">{props ? "Select a property" : "Loading…"}</option>
-              {(props?.gscSites || []).map((site) => (
-                <option key={site.siteUrl} value={site.siteUrl}>
-                  {site.siteUrl}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="integration-field">
+            {!match ? (
+              <p className="integration-help">Looking for {hostOf(website)} in this Google account…</p>
+            ) : match.gscSite ? (
+              <p className="integration-help">
+                <strong>{match.gscSite.siteUrl}</strong> — matched automatically.
+              </p>
+            ) : (
+              <p className="integration-error">
+                Your project website ({hostOf(website)}) isn’t a Search Console property in this Google account
+                {match.counts?.gsc ? ` (${match.counts.gsc} propert${match.counts.gsc === 1 ? "y" : "ies"} found)` : ""}.
+              </p>
+            )}
+          </div>
+          <div className="integration-field">
             <span>GA4 property</span>
-            <select value={ga4PropertyId} onChange={(e) => setGa4PropertyId(e.target.value)} disabled={!props}>
-              <option value="">{props ? "Select a property" : "Loading…"}</option>
-              {(props?.ga4Properties || []).map((p) => (
-                <option key={p.propertyId} value={p.propertyId}>
-                  {p.displayName} · {p.account}
-                </option>
-              ))}
-            </select>
-          </label>
+            {!match ? (
+              <p className="integration-help">Checking GA4 data streams…</p>
+            ) : match.ga4Property ? (
+              <p className="integration-help">
+                <strong>{match.ga4Property.displayName}</strong> · {match.ga4Property.account} — stream {hostOf(match.ga4Property.streamUrl)}.
+              </p>
+            ) : (
+              <p className="integration-error">
+                No GA4 property in this Google account has a web stream for {hostOf(website)}
+                {match.counts?.ga4 ? ` (${match.counts.ga4} propert${match.counts.ga4 === 1 ? "y" : "ies"} checked)` : ""}.
+              </p>
+            )}
+          </div>
+          {match && (!match.gscSite || !match.ga4Property) ? (
+            <p className="integration-help">
+              Blazly only reads data for this project’s own website. Sign in with the Google account that owns{" "}
+              {hostOf(website)} in Search Console and GA4, or update the project website under Projects → Edit.
+            </p>
+          ) : null}
           {error ? <p className="integration-error">{error}</p> : null}
           <div className="integration-row">
-            <span className="integration-muted">{saved ? "Saved." : ""}</span>
-            <button type="button" className="btn btn-primary" disabled={busy || !props} onClick={save}>
-              Save properties
+            <span className="integration-muted">{match ? "Properties are matched to the project website automatically." : ""}</span>
+            <button type="button" className="btn btn-secondary" disabled={busy || !match} onClick={recheck}>
+              {busy ? "Checking…" : "Re-check"}
             </button>
           </div>
         </div>

@@ -121,8 +121,6 @@ import { loadWorkspaceMode, saveWorkspaceMode, WORKSPACE_MODES } from "./workspa
 import { WorkspaceModeToggle } from "./WorkspaceModeToggle.jsx";
 import { IntegrationsView } from "./IntegrationsView.jsx";
 import {
-  deleteProjectIntegrations,
-  renameProjectIntegrations,
   runSiteIntegrationsStream,
 } from "./integrationsClient.js";
 import { Icon } from "./Icon.jsx";
@@ -161,7 +159,8 @@ import { DiscussionsView } from "./DiscussionsView.jsx";
 import { ReferralModal } from "./ReferralModal.jsx";
 import { PLANS } from "./plans.js";
 import { claimPendingReferral } from "./referralClient.js";
-import { acceptPendingTeamInvite, registerProject, syncProjectsWithServer } from "./accountClient.js";
+import { acceptPendingTeamInvite, deleteProjectOnServer, editProjectOnServer, registerProject, syncProjectsWithServer } from "./accountClient.js";
+import { normalizeWebsite } from "./ProjectSetupWizard.jsx";
 import { CreditMeter, useCredits } from "./CreditsCard.jsx";
 import {
   createSchedule,
@@ -559,6 +558,7 @@ export function Workspace() {
       name: entry.name,
       logo: entry.logo || "",
       website: websiteHost(site),
+      fullWebsite: site,
       status: entry.name === project ? `Active · ${chatLabel}` : chatLabel,
     };
   });
@@ -662,11 +662,16 @@ export function Workspace() {
     });
   }, [user?.uid]);
 
-  const projectNamesKey = projects.map((entry) => entry.name).join("\u0000");
+  const projectNamesKey = projects.map((entry) => `${entry.name}\u0001${projectDisplayWebsite(entry)}`).join("\u0000");
   useEffect(() => {
     if (!user?.uid || !projectNamesKey) return;
-    syncProjectsWithServer(projectNamesKey.split("\u0000")).catch(() => {});
+    const entries = projectNamesKey.split("\u0000").map((pair) => {
+      const [name, website] = pair.split("\u0001");
+      return { name, website };
+    });
+    syncProjectsWithServer(entries).catch(() => {});
   }, [user?.uid, projectNamesKey]);
+  const isPaidPlan = Boolean(credits.data) && (credits.data.plan || "free") !== "free";
 
   const [billingNotice, setBillingNotice] = useState("");
   useEffect(() => {
@@ -1000,16 +1005,43 @@ export function Workspace() {
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  async function renameProject(oldName, rawName) {
-    const name = String(rawName || "").trim();
-    if (!name || name === oldName) return;
+  async function renameProject(oldName, rawName, rawWebsite) {
+    const name = String(rawName || "").trim() || oldName;
+    const current = projects.find((entry) => entry.name === oldName);
+    if (!current) return;
     if (name.length > 60) throw new Error("Keep the project name under 60 characters.");
     if (projects.some((entry) => entry.name !== oldName && entry.name.toLowerCase() === name.toLowerCase())) {
       throw new Error("That project name already exists.");
     }
-    if (user?.uid) await renameProjectIntegrations({ uid: user.uid, from: oldName, to: name });
+    const currentSite = projectDisplayWebsite(current);
+    const website = rawWebsite === undefined ? currentSite : normalizeWebsite(String(rawWebsite || ""));
+    if (name === oldName && website === currentSite) return;
+    if (!isPaidPlan) {
+      const err = new Error("Editing projects is available on Pro and Business plans.");
+      err.code = "plan_required";
+      throw err;
+    }
 
-    const next = projects.map((entry) => (entry.name === oldName ? { ...entry, name } : entry));
+    // The server enforces: paid plan, one change per 30 days, and resets integrations when the site changes.
+    const result = user?.uid ? await editProjectOnServer({ from: oldName, to: name, website }) : { name, website, websiteChanged: website !== currentSite };
+    let knowledge = current.knowledge;
+    if (result.websiteChanged) {
+      try {
+        const response = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ website }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data.knowledge) knowledge = { ...data.knowledge, companyName: data.knowledge.companyName || name };
+      } catch {
+        // Keep the old knowledge base if the new site can't be read right now.
+      }
+    }
+
+    const next = projects.map((entry) =>
+      entry.name === oldName ? { ...entry, name, website, knowledge, logo: result.websiteChanged ? "" : entry.logo } : entry,
+    );
     setProjects(next);
     if (user?.uid) saveProjects(user.uid, next);
 
@@ -1062,7 +1094,7 @@ export function Workspace() {
     if (projects.some((entry) => entry.name.toLowerCase() === name.toLowerCase())) {
       throw new Error("That project name already exists.");
     }
-    if (user?.uid) await registerProject(name);
+    if (user?.uid) await registerProject(name, data.website);
     const record = {
       id: newProjectId(),
       name,
@@ -1078,9 +1110,14 @@ export function Workspace() {
     setStatus("");
   }
 
-  function deleteProject(name) {
+  async function deleteProject(name) {
     if (projects.length <= 1) {
       setStatus("Keep at least one project.");
+      return;
+    }
+    if (!isPaidPlan) {
+      setBillingNotice("project-edit");
+      setView("pricing");
       return;
     }
     const fallback = projects.find((entry) => entry.name !== name)?.name || projects[0]?.name;
@@ -1089,12 +1126,22 @@ export function Workspace() {
       `Delete "${name}"? Its ${chatCount ? `${chatCount} chat(s), ` : ""}knowledge base and integrations will be removed. This can't be undone.`
     );
     if (!confirmed) return;
+    if (user?.uid) {
+      try {
+        await deleteProjectOnServer(name);
+      } catch (err) {
+        if (err.code === "plan_required") {
+          setBillingNotice("project-edit");
+          setView("pricing");
+        } else {
+          setStatus(err.message || "Could not delete this project.");
+        }
+        return;
+      }
+    }
     const next = projects.filter((entry) => entry.name !== name);
     setProjects(next);
-    if (user?.uid) {
-      saveProjects(user.uid, next);
-      deleteProjectIntegrations({ uid: user.uid, project: name }).catch(() => {});
-    }
+    if (user?.uid) saveProjects(user.uid, next);
 
     setChats((current) => {
       const updated = current.filter((chat) => chat.project !== name);
@@ -2637,17 +2684,17 @@ export function Workspace() {
                         name={item.name}
                         logo={item.logo}
                         current={item.name === project}
-                        canDelete={projects.length > 1}
+                        canEdit={isPaidPlan}
+                        canDelete={isPaidPlan && projects.length > 1}
                         onSelect={() => {
                           chooseProject(item.name);
                           setProjectOpen(false);
                         }}
                         onDelete={() => deleteProject(item.name)}
                         onRename={() => {
-                          const next = window.prompt("Rename project", item.name);
-                          if (next == null) return;
-                          renameProject(item.name, next).catch((err) => setStatus(err.message));
                           setProjectOpen(false);
+                          setOpenedProject(null);
+                          setView("projects");
                         }}
                       />
                     ))}
@@ -2965,13 +3012,19 @@ export function Workspace() {
                         key={item.name}
                         title={item.name}
                         logo={item.logo}
+                        website={item.fullWebsite}
                         body={item.website || "No website yet"}
                         status={item.status}
                         current={item.name === project}
-                        canDelete={projects.length > 1}
+                        canEdit={isPaidPlan}
+                        canDelete={isPaidPlan && projects.length > 1}
                         onSelect={() => openProjectDetail(item.name)}
                         onDelete={() => deleteProject(item.name)}
-                        onRename={(next) => renameProject(item.name, next)}
+                        onRename={(next, website) => renameProject(item.name, next, website)}
+                        onUpgrade={() => {
+                          setBillingNotice("project-edit");
+                          setView("pricing");
+                        }}
                       />
                     ))}
                   </div>
@@ -3040,7 +3093,7 @@ export function Workspace() {
                 />
               )}
               {view === "integrations" && (
-                <IntegrationsView uid={user?.uid} project={project} notice={integrationsNotice} />
+                <IntegrationsView uid={user?.uid} project={project} website={projectDisplayWebsite(projects.find((entry) => entry.name === project))} notice={integrationsNotice} />
               )}
               {view === "settings" && (
                 <SettingsView
@@ -3192,7 +3245,7 @@ function AgentCard({ agent, active, disabled = false, onSelect }) {
   );
 }
 
-function ProjectMenuRow({ name, logo, current, canDelete, onSelect, onDelete, onRename }) {
+function ProjectMenuRow({ name, logo, current, canEdit, canDelete, onSelect, onDelete, onRename }) {
   return (
     <div className={`menu-project-row${current ? " is-current" : ""}`}>
       <button type="button" role="menuitem" className="menu-project-select" onClick={onSelect}>
@@ -3200,18 +3253,20 @@ function ProjectMenuRow({ name, logo, current, canDelete, onSelect, onDelete, on
         <span className="menu-project-name">{name}</span>
         {current ? <Icon name="check" size={15} className="menu-project-check" /> : null}
       </button>
-      <button
-        type="button"
-        className="menu-project-delete menu-project-rename"
-        aria-label={`Rename ${name}`}
-        title={`Rename ${name}`}
-        onClick={(event) => {
-          event.stopPropagation();
-          onRename();
-        }}
-      >
-        <Icon name="pencil" size={14} />
-      </button>
+      {canEdit ? (
+        <button
+          type="button"
+          className="menu-project-delete menu-project-rename"
+          aria-label={`Edit ${name}`}
+          title={`Edit ${name}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onRename();
+          }}
+        >
+          <Icon name="pencil" size={14} />
+        </button>
+      ) : null}
       {canDelete ? (
         <button
           type="button"
@@ -3230,27 +3285,39 @@ function ProjectMenuRow({ name, logo, current, canDelete, onSelect, onDelete, on
   );
 }
 
-function ProjectWorkCard({ title, logo, body, status, current, canDelete, onSelect, onDelete, onRename }) {
+function ProjectWorkCard({ title, logo, website, body, status, current, canEdit, canDelete, onSelect, onDelete, onRename, onUpgrade }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
+  const [siteDraft, setSiteDraft] = useState(website || "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   function startEditing() {
     setDraft(title);
+    setSiteDraft(website || "");
     setError("");
     setEditing(true);
   }
 
   async function submit(event) {
     event.preventDefault();
+    const siteChanged = siteDraft.trim() !== (website || "");
+    if (
+      siteChanged &&
+      !window.confirm(
+        "Changing the website rebuilds this project's knowledge base and disconnects its integrations (they only work with the project's own site). You can change a project once every 30 days. Continue?",
+      )
+    ) {
+      return;
+    }
     setSaving(true);
     setError("");
     try {
-      await onRename(draft);
+      await onRename(draft, siteDraft);
       setEditing(false);
     } catch (err) {
-      setError(err.message || "Could not rename this project.");
+      if (err.code === "plan_required") onUpgrade?.();
+      setError(err.message || "Could not update this project.");
     } finally {
       setSaving(false);
     }
@@ -3270,12 +3337,25 @@ function ProjectWorkCard({ title, logo, body, status, current, canDelete, onSele
             }}
             maxLength={60}
             aria-label="Project name"
+            placeholder="Project name"
             autoFocus
           />
+          <input
+            className="project-rename-input"
+            value={siteDraft}
+            onChange={(e) => setSiteDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setEditing(false);
+            }}
+            aria-label="Project website"
+            placeholder="https://yoursite.com"
+            inputMode="url"
+          />
+          <span className="project-rename-hint">Projects can be changed once every 30 days.</span>
           {error ? <span className="project-rename-error">{error}</span> : null}
           <span className="project-rename-actions">
-            <button type="submit" className="btn btn-primary" disabled={saving || !draft.trim()}>
-              {saving ? "Saving…" : "Save"}
+            <button type="submit" className="btn btn-primary" disabled={saving || !draft.trim() || !siteDraft.trim()}>
+              {saving ? (siteDraft.trim() !== (website || "") ? "Analyzing site…" : "Saving…") : "Save"}
             </button>
             <button type="button" className="btn btn-secondary" onClick={() => setEditing(false)}>
               Cancel
@@ -3293,9 +3373,15 @@ function ProjectWorkCard({ title, logo, body, status, current, canDelete, onSele
       )}
       {!editing ? (
         <div className="project-card-footer">
-          <button type="button" className="project-card-action" onClick={startEditing}>
-            Rename
-          </button>
+          {canEdit ? (
+            <button type="button" className="project-card-action" onClick={startEditing}>
+              Edit
+            </button>
+          ) : (
+            <button type="button" className="project-card-action" onClick={onUpgrade} title="Editing and deleting projects is available on paid plans">
+              Upgrade to edit
+            </button>
+          )}
           {canDelete ? (
             <button type="button" className="project-card-delete" aria-label={`Delete ${title}`} onClick={onDelete}>
               Delete project

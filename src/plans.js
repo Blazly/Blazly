@@ -32,7 +32,7 @@ export const PLANS = {
       "1 project with brand profile and logo",
       "Chat history and file exports",
     ],
-    excluded: ["Scheduling", "MCP / Connect AI tools", "B2B leads", "Max-effort blogs", "Reels creation"],
+    excluded: ["Scheduling", "MCP / Connect AI tools", "B2B leads", "Max-effort blogs", "Reels creation", "Editing or deleting projects"],
   },
   pro: {
     id: "pro",
@@ -61,7 +61,7 @@ export const PLANS = {
       "Google Search Console and GA4 integration",
       "Connect Blazly to Claude, ChatGPT, Cursor and Lovable (MCP)",
       "Personal API keys for AI tools",
-      "3 projects",
+      "3 projects — edit name or website (once every 30 days) and delete",
       "Top-ups at $2 / 100 credits",
       "Email support",
     ],
@@ -83,7 +83,7 @@ export const PLANS = {
     features: [
       "Everything in Pro, plus:",
       "5,500 credits every month (unused credits roll over)",
-      "10 projects for multiple brands or clients",
+      "10 projects for multiple brands or clients — edit or delete anytime (30-day cooldown per change)",
       "3 team seats",
       "Higher scheduling limits for every project",
       "MCP API keys per project",

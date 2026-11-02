@@ -1,6 +1,7 @@
 import { identify } from "../credits/middleware.js";
-import { removeProject, renameProject } from "../billing/projects.js";
-import { deleteProjectIntegrations, getProjectIntegrations, renameProjectIntegrations, setProvider } from "./store.js";
+import { projectWebsite, removeProject } from "../billing/projects.js";
+import { mismatchError, requireProjectWebsite, sameSite, siteHost } from "./siteMatch.js";
+import { deleteProjectIntegrations, getProjectIntegrations, setProvider } from "./store.js";
 import { buildWordPressAuthUrl, normalizeSiteUrl, testWordPress } from "./wordpress.js";
 import {
   buildWebflowAuthUrl,
@@ -14,10 +15,50 @@ import {
 import { generateWebhookSecret, normalizeEndpointUrl, testWebhook } from "./webhook.js";
 import { buildAuthUrl, exchangeCode, saveGoogleTokens, signState, verifyState } from "./google.js";
 import { listGscSites } from "./gsc.js";
-import { listGa4Properties } from "./ga4.js";
+import { listGa4Properties, listGa4StreamUrls } from "./ga4.js";
 import { parseUrl, readJson, redirect, requestOrigin, sendJson, writeSse } from "./http.js";
 import { runIntegrationsAgent } from "../integrationsAgent.js";
-import { renameKeysProject } from "../publicMcp/keys.js";
+
+/** The only URL integrations are allowed to talk to for a project. */
+async function lockedSite(uid, project) {
+  const website = await projectWebsite(uid, project);
+  requireProjectWebsite(website, project);
+  return website;
+}
+
+/** Picks the Search Console site and GA4 property that belong to the project's website; nothing else is offered. */
+async function matchGoogleProperties(uid, project, website) {
+  const [gsc, ga4] = await Promise.allSettled([listGscSites(uid, project), listGa4Properties(uid, project)]);
+  const gscSites = gsc.status === "fulfilled" ? gsc.value : [];
+  const ga4Properties = ga4.status === "fulfilled" ? ga4.value : [];
+  const host = siteHost(website);
+
+  const gscMatches = gscSites.filter((s) => sameSite(website, s.siteUrl));
+  // Prefer the exact host, then a domain property, then anything on the same site.
+  const gscSite =
+    gscMatches.find((s) => siteHost(s.siteUrl) === host && !/^sc-domain:/i.test(s.siteUrl)) ||
+    gscMatches.find((s) => /^sc-domain:/i.test(s.siteUrl)) ||
+    gscMatches[0] ||
+    null;
+
+  let ga4Property = null;
+  const candidates = ga4Properties.slice(0, 60);
+  const streams = await Promise.allSettled(candidates.map((p) => listGa4StreamUrls(uid, project, p.propertyId)));
+  for (let i = 0; i < candidates.length && !ga4Property; i += 1) {
+    const urls = streams[i].status === "fulfilled" ? streams[i].value : [];
+    if (urls.some((u) => sameSite(website, u))) ga4Property = { ...candidates[i], streamUrl: urls.find((u) => sameSite(website, u)) };
+  }
+  return {
+    projectHost: host,
+    gscSite,
+    ga4Property,
+    counts: { gsc: gscSites.length, ga4: ga4Properties.length },
+    errors: {
+      gsc: gsc.status === "rejected" ? gsc.reason.message : "",
+      ga4: ga4.status === "rejected" ? ga4.reason.message : "",
+    },
+  };
+}
 
 function publicStatus(integrations) {
   const wp = integrations.wordpress;
@@ -88,7 +129,7 @@ export function attachIntegrations(server, ctx) {
         const body = await readJson(req);
         const uid = (await requireAuth(req));
         const creds = {
-          siteUrl: normalizeSiteUrl(body.siteUrl),
+          siteUrl: normalizeSiteUrl(await lockedSite(uid, body.project)),
           username: String(body.username || "").trim(),
           appPassword: String(body.appPassword || "").trim(),
         };
@@ -106,9 +147,10 @@ export function attachIntegrations(server, ctx) {
         const uid = (await requireAuth(req));
         const origin = requestOrigin(req);
         const project = body.project || "default";
-        const state = signState({ uid, project, provider: "wordpress", siteUrl: normalizeSiteUrl(body.siteUrl) });
+        const projectSite = normalizeSiteUrl(await lockedSite(uid, project));
+        const state = signState({ uid, project, provider: "wordpress", siteUrl: projectSite });
         const result = await buildWordPressAuthUrl({
-          siteUrl: body.siteUrl,
+          siteUrl: projectSite,
           callbackUrl: `${origin}/api/integrations/wordpress/callback?state=${encodeURIComponent(state)}`,
           rejectUrl: `${origin}/?integrations=error&reason=${encodeURIComponent("WordPress access was not approved.")}`,
         });
@@ -122,7 +164,9 @@ export function attachIntegrations(server, ctx) {
         const username = String(params.get("user_login") || "").trim();
         const appPassword = String(params.get("password") || "").trim();
         if (!username || !appPassword) throw new Error("WordPress didn't return an application password.");
-        const creds = { siteUrl: normalizeSiteUrl(params.get("site_url") || siteUrl), username, appPassword };
+        const returned = normalizeSiteUrl(params.get("site_url") || siteUrl);
+        if (!sameSite(siteUrl, returned)) throw mismatchError("The WordPress site", siteUrl, returned);
+        const creds = { siteUrl: returned, username, appPassword };
         const check = await testWordPress(creds);
         await setProvider(uid, project, "wordpress", { ...creds, displayName: check.name });
         redirect(res, "/?integrations=wordpress-connected");
@@ -151,7 +195,10 @@ export function attachIntegrations(server, ctx) {
 
       if (path === "/api/integrations/webflow/sites" && req.method === "GET") {
         const uid = (await requireAuth(req));
-        sendJson(res, 200, { sites: await listWebflowSites(uid, params.get("project")) });
+        const website = await lockedSite(uid, params.get("project"));
+        const sites = await listWebflowSites(uid, params.get("project"));
+        const matched = sites.find((s) => s.domains.some((d) => sameSite(website, d))) || sites.find((s) => sameSite(website, `${s.shortName}.webflow.io`)) || null;
+        sendJson(res, 200, { sites, matchedSiteId: matched?.id || "", projectHost: siteHost(website) });
         return;
       }
 
@@ -166,8 +213,12 @@ export function attachIntegrations(server, ctx) {
         const body = await readJson(req);
         const uid = (await requireAuth(req));
         const sites = await listWebflowSites(uid, body.project);
+        const website = await lockedSite(uid, body.project);
         const site = sites.find((s) => s.id === body.siteId);
         if (!site) throw new Error("Pick a Webflow site.");
+        if (!site.domains.some((d) => sameSite(website, d)) && !sameSite(website, `${site.shortName}.webflow.io`)) {
+          throw mismatchError("The Webflow site", website, site.domains[0] || site.shortName);
+        }
         const collections = await listWebflowCollections(uid, body.project, site.id);
         const collection = collections.find((c) => c.id === body.collectionId);
         if (!collection) throw new Error("Pick the CMS collection that holds your blog posts.");
@@ -188,10 +239,13 @@ export function attachIntegrations(server, ctx) {
         const body = await readJson(req);
         const uid = (await requireAuth(req));
         const existing = (await getProjectIntegrations(uid, body.project)).webhook;
+        const website = await lockedSite(uid, body.project);
+        const endpointUrl = normalizeEndpointUrl(body.endpointUrl || existing?.endpointUrl);
+        if (!sameSite(website, endpointUrl)) throw mismatchError("The webhook endpoint", website, endpointUrl);
         const config = {
-          endpointUrl: normalizeEndpointUrl(body.endpointUrl || existing?.endpointUrl),
+          endpointUrl,
           secret: body.rotateSecret || !existing?.secret ? generateWebhookSecret() : existing.secret,
-          siteUrl: String(body.siteUrl ?? existing?.siteUrl ?? "").trim(),
+          siteUrl: website,
         };
         const unchanged = existing?.verifiedAt && existing.endpointUrl === config.endpointUrl && existing.secret === config.secret;
         await setProvider(uid, body.project, "webhook", { ...config, verifiedAt: unchanged ? existing.verifiedAt : "" });
@@ -212,19 +266,16 @@ export function attachIntegrations(server, ctx) {
 
       if (path === "/api/integrations/project/rename" && req.method === "POST") {
         const body = await readJson(req);
-        const uid = (await requireAuth(req));
-        await renameProjectIntegrations(uid, String(body.from || ""), String(body.to || ""));
-        await renameKeysProject(uid, String(body.from || ""), String(body.to || ""));
-        await renameProject(uid, String(body.from || ""), String(body.to || ""));
-        sendJson(res, 200, { ok: true });
+        await requireAuth(req);
+        throw Object.assign(new Error("Use Projects → Edit to rename a project."), { status: 410 });
         return;
       }
 
       if (path === "/api/integrations/project/delete" && req.method === "POST") {
         const body = await readJson(req);
         const uid = (await requireAuth(req));
+        await removeProject(uid, String(body.project || "")); // paid plans only
         await deleteProjectIntegrations(uid, String(body.project || ""));
-        await removeProject(uid, String(body.project || ""));
         sendJson(res, 200, { ok: true });
         return;
       }
@@ -260,25 +311,34 @@ export function attachIntegrations(server, ctx) {
       if (path === "/api/integrations/google/properties" && req.method === "GET") {
         const uid = (await requireAuth(req));
         const project = params.get("project");
-        const [gsc, ga4] = await Promise.allSettled([listGscSites(uid, project), listGa4Properties(uid, project)]);
-        sendJson(res, 200, {
-          gscSites: gsc.status === "fulfilled" ? gsc.value : [],
-          ga4Properties: ga4.status === "fulfilled" ? ga4.value : [],
-          errors: {
-            gsc: gsc.status === "rejected" ? gsc.reason.message : "",
-            ga4: ga4.status === "rejected" ? ga4.reason.message : "",
-          },
-        });
+        const website = await lockedSite(uid, project);
+        const match = await matchGoogleProperties(uid, project, website);
+        const current = (await getProjectIntegrations(uid, project)).google || {};
+        const selection = {
+          gscSiteUrl: match.gscSite?.siteUrl || "",
+          ga4PropertyId: match.ga4Property?.propertyId || "",
+          ga4PropertyName: match.ga4Property?.displayName || "",
+        };
+        if (
+          current.gscSiteUrl !== selection.gscSiteUrl ||
+          current.ga4PropertyId !== selection.ga4PropertyId ||
+          current.ga4PropertyName !== selection.ga4PropertyName
+        ) {
+          await setProvider(uid, project, "google", selection);
+        }
+        sendJson(res, 200, { ...match, status: publicStatus(await getProjectIntegrations(uid, project)) });
         return;
       }
 
       if (path === "/api/integrations/google/select" && req.method === "POST") {
         const body = await readJson(req);
         const uid = (await requireAuth(req));
+        const website = await lockedSite(uid, body.project);
+        const match = await matchGoogleProperties(uid, body.project, website);
         await setProvider(uid, body.project, "google", {
-          gscSiteUrl: String(body.gscSiteUrl || ""),
-          ga4PropertyId: String(body.ga4PropertyId || ""),
-          ga4PropertyName: String(body.ga4PropertyName || ""),
+          gscSiteUrl: match.gscSite?.siteUrl || "",
+          ga4PropertyId: match.ga4Property?.propertyId || "",
+          ga4PropertyName: match.ga4Property?.displayName || "",
         });
         sendJson(res, 200, publicStatus(await getProjectIntegrations(uid, body.project)));
         return;
@@ -308,7 +368,7 @@ export function attachIntegrations(server, ctx) {
         redirect(res, `/?integrations=error&reason=${encodeURIComponent(error.message)}`);
         return;
       }
-      sendJson(res, error.status || 400, { error: error.message || "Integration request failed." });
+      sendJson(res, error.status || 400, { error: error.message || "Integration request failed.", code: error.code, nextEditAt: error.nextEditAt, requiredPlan: error.requiredPlan });
     }
   });
 }

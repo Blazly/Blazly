@@ -16,8 +16,14 @@ export const inviteTeammate = (email) => call("POST", "/api/team/invite", { emai
 export const removeTeammate = (email) => call("POST", "/api/team/remove", { email });
 export const leaveTeam = () => call("POST", "/api/team/leave", {});
 
-export const syncProjectsWithServer = (names) => call("POST", "/api/projects/sync", { names });
-export const registerProject = (name) => call("POST", "/api/projects/add", { name });
+/** `projects` is a list of { name, website }. */
+export const syncProjectsWithServer = (projects) => call("POST", "/api/projects/sync", { projects });
+export const registerProject = (name, website) => call("POST", "/api/projects/add", { name, website });
+export const fetchProjectPolicy = () => call("GET", "/api/projects");
+/** Paid plans only, once per 30 days. Returns { name, website, websiteChanged }. */
+export const editProjectOnServer = ({ from, to, website }) => call("POST", "/api/projects/edit", { from, to, website });
+/** Paid plans only. Also removes the project's integrations. */
+export const deleteProjectOnServer = (name) => call("POST", "/api/projects/remove", { name });
 
 /** Remembers ?team=TOKEN so it survives sign-up. */
 export function captureTeamInviteFromUrl() {

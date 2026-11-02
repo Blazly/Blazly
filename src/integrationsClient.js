@@ -9,23 +9,23 @@ export async function fetchIntegrationStatus(uid, project) {
   return json(await fetch(`/api/integrations/status?${qs}`), "Could not load integrations.");
 }
 
-export async function connectWordPress({ uid, project, siteUrl, username, appPassword }) {
+export async function connectWordPress({ uid, project, username, appPassword }) {
   return json(
     await fetch("/api/integrations/wordpress", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uid, project, siteUrl, username, appPassword }),
+      body: JSON.stringify({ project, username, appPassword }),
     }),
     "Could not connect WordPress.",
   );
 }
 
-export async function startWordPressApproval({ uid, project, siteUrl }) {
+export async function startWordPressApproval({ uid, project }) {
   const { url } = await json(
     await fetch("/api/integrations/wordpress/authorize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uid, project, siteUrl }),
+      body: JSON.stringify({ project }),
     }),
     "Could not reach your WordPress site.",
   );
@@ -87,12 +87,12 @@ export async function selectWebflowTarget({ uid, project, siteId, collectionId }
   );
 }
 
-export async function saveWebhook({ uid, project, endpointUrl, siteUrl, rotateSecret }) {
+export async function saveWebhook({ uid, project, endpointUrl, rotateSecret }) {
   return json(
     await fetch("/api/integrations/webhook", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uid, project, endpointUrl, siteUrl, rotateSecret }),
+      body: JSON.stringify({ project, endpointUrl, rotateSecret }),
     }),
     "Could not save the webhook.",
   );

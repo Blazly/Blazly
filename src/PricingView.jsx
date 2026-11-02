@@ -9,6 +9,7 @@ const NOTICES = {
   "topup-success": { tone: "success", text: "Top-up complete. Your new credits will appear in a few seconds." },
   cancelled: { tone: "info", text: "Checkout cancelled. Nothing was charged." },
   "project-limit": { tone: "info", text: "You've reached the project limit for your plan. Upgrade to add more projects." },
+  "project-edit": { tone: "info", text: "Editing and deleting projects is available on Pro and Business. Upgrade to change your project's name or website (once every 30 days)." },
 };
 
 const MODE_ROWS = [
