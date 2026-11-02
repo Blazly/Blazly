@@ -94,8 +94,8 @@ export function CreditsCard() {
           Every agent run uses credits based on the AI and data it needs. {data?.plan === "free" ? "Free plan." : ""}
         </p>
       </div>
-      {error ? <p className="profile-field-error">{error}</p> : null}
-      {!data && !error ? <p className="settings-section-note">Loading credits…</p> : null}
+      {error ? <p className="profile-field-error credit-card-note">{error}</p> : null}
+      {!data && !error ? <p className="settings-section-note credit-card-note">Loading credits…</p> : null}
       {data ? (
         <div className="credit-overview">
           <CreditGauge used={data.used || 0} granted={data.granted || 0} />

@@ -905,7 +905,11 @@ button.card:hover .card-arrow,
   display: flex;
   align-items: center;
   gap: 28px;
-  padding: 8px 0 4px;
+  padding: 8px 18px 16px;
+}
+
+.credit-card-note {
+  padding: 0 18px 16px;
 }
 
 .credit-gauge {
@@ -1000,8 +1004,8 @@ button.card:hover .card-arrow,
 }
 
 .credit-usage {
-  margin: 12px 0 0;
-  padding: 0;
+  margin: 0;
+  padding: 0 18px 8px;
   list-style: none;
 }
 
@@ -1009,9 +1013,13 @@ button.card:hover .card-arrow,
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 9px 0;
+  padding: 10px 0;
   font-size: 13.5px;
   border-top: 1px solid var(--line);
+}
+
+.credit-usage li:last-child {
+  padding-bottom: 4px;
 }
 
 .credit-usage-label {
