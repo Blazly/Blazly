@@ -4,7 +4,7 @@ import { readJson } from "../readJson.js";
 import { resolveBilling } from "../billing/team.js";
 import { limitsFor } from "../billing/rateLimit.js";
 import { resolveBaseUrl } from "../scheduler/index.js";
-import { createJob, finishJob, listUndelivered, markDelivered, preloadJobs, runningJobCount } from "./store.js";
+import { appendFrame, createJob, finishJob, getJob, listUndelivered, markDelivered, preloadJobs, runningJobCount, subscribeFrames } from "./store.js";
 
 /** Quick, conversational endpoints stay attached to the browser; everything else becomes a background job. */
 const PASSTHROUGH = new Set(["/api/chat", "/api/ai-orchestrator"]);
@@ -98,7 +98,9 @@ async function runDetached({ baseUrl, path, body, who, job, browser }) {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      tracker.feed(decoder.decode(value, { stream: true }));
+      const text = decoder.decode(value, { stream: true });
+      tracker.feed(text);
+      appendFrame(job.id, text);
       if (browser.alive()) browser.res.write(value);
     }
     tracker.feed(decoder.decode(), true);
@@ -129,6 +131,43 @@ export function attachJobRelay(server) {
       const body = await readJson(req).catch(() => ({}));
       const ids = Array.isArray(body.ids) ? body.ids.map(String).slice(0, 200) : [];
       return sendJson(res, 200, { acknowledged: await markDelivered(who.uid, ids) });
+    }
+
+    const streamMatch = req.method === "GET" && path.match(/^\/api\/jobs\/([a-z0-9_]+)\/stream$/);
+    if (streamMatch) {
+      const who = await identify(req);
+      if (!who) return sendJson(res, 401, { error: "Sign in first." });
+      const job = await getJob(streamMatch[1]);
+      if (!job || job.uid !== who.uid) return sendJson(res, 404, { error: "Task not found." });
+      sseHeaders(res);
+      if (job.status !== "running") {
+        const frame = job.status === "done" ? { type: "complete", content: job.content } : { type: "error", error: job.error };
+        res.end(`data: ${JSON.stringify(frame)}\n\n`);
+        return;
+      }
+      const unsubscribe = subscribeFrames(job.id, (text, ended) => {
+        if (res.writableEnded || res.destroyed) return;
+        if (ended) {
+          // The final frame was already forwarded; make sure a late subscriber still gets a terminal event.
+          getJob(job.id).then((finished) => {
+            if (res.writableEnded || res.destroyed) return;
+            const frame = !finished || finished.status === "done"
+              ? { type: "complete", content: finished?.content || "" }
+              : { type: "error", error: finished.error };
+            res.end(`data: ${JSON.stringify(frame)}\n\n`);
+          });
+          return;
+        }
+        res.write(text);
+      });
+      const keepAlive = setInterval(() => {
+        if (!res.writableEnded && !res.destroyed) res.write(": ping\n\n");
+      }, 15_000);
+      res.on("close", () => {
+        clearInterval(keepAlive);
+        unsubscribe();
+      });
+      return;
     }
 
     if (req.method !== "POST" || !AGENT_PRICING[path] || PASSTHROUGH.has(path)) return next();

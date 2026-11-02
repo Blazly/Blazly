@@ -14,6 +14,40 @@ const MAX_CONTENT_CHARS = 4_000_000;
 const jobs = new Map();
 let loaded = null;
 
+/** Live SSE frames for running jobs (memory only) so a returning tab can replay progress. */
+const live = new Map(); // id -> { frames: string[], bytes: number, subscribers: Set<fn> }
+const MAX_LIVE_BYTES = 6_000_000;
+
+export function appendFrame(id, text) {
+  const entry = live.get(id) || { frames: [], bytes: 0, subscribers: new Set() };
+  entry.frames.push(text);
+  entry.bytes += text.length;
+  while (entry.bytes > MAX_LIVE_BYTES && entry.frames.length > 1) entry.bytes -= entry.frames.shift().length;
+  live.set(id, entry);
+  for (const fn of entry.subscribers) fn(text, false);
+}
+
+/** Replays buffered frames, then streams new ones. Returns an unsubscribe function. */
+export function subscribeFrames(id, fn) {
+  const entry = live.get(id) || { frames: [], bytes: 0, subscribers: new Set() };
+  live.set(id, entry);
+  for (const frame of entry.frames) fn(frame, false);
+  entry.subscribers.add(fn);
+  return () => entry.subscribers.delete(fn);
+}
+
+function closeLive(id) {
+  const entry = live.get(id);
+  if (!entry) return;
+  for (const fn of entry.subscribers) fn("", true);
+  live.delete(id);
+}
+
+export async function getJob(id) {
+  await load();
+  return jobs.get(id) || null;
+}
+
 async function load() {
   if (loaded) return loaded;
   loaded = (async () => {
@@ -92,6 +126,7 @@ export async function finishJob(id, { ok, content, error, delivered }) {
   job.finishedAt = new Date().toISOString();
   if (job.delivered) await remove(job);
   else await persist(job);
+  closeLive(id);
   return job;
 }
 

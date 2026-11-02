@@ -171,7 +171,7 @@ import {
   saveImportedRunIds,
 } from "./schedulesClient.js";
 import { useAuth } from "./AuthContext.jsx";
-import { ackJobs, CONNECTION_LOST_STATUS, fetchPendingJobs, isConnectionError, setJobContext } from "./jobsClient.js";
+import { ackJobs, attachJobStream, CONNECTION_LOST_STATUS, fetchPendingJobs, isConnectionError, setJobContext } from "./jobsClient.js";
 import { saveProject } from "./firebase.js";
 
 const MODES = ["Auto", "Fast", "Deep"];
@@ -454,6 +454,14 @@ export function Workspace() {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
+  const runningJobsRef = useRef(new Map()); // chatId -> running background job
+  const [runningJobsVersion, setRunningJobsVersion] = useState(0);
+  const attachedJobRef = useRef(null); // { id, chatId, controller } while following a background job
+  const autoOpenedJobsRef = useRef(new Set());
+  const busyRef = useRef(false);
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
   const [status, setStatus] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [editorDraft, setEditorDraft] = useState(null);
@@ -757,8 +765,56 @@ export function Workspace() {
       if (inFlight || document.visibilityState === "hidden") return;
       inFlight = true;
       try {
-        const jobs = (await fetchPendingJobs()).filter((job) => job.status === "done" || job.status === "failed");
-        if (cancelled || !jobs.length) return;
+        const all = await fetchPendingJobs();
+        if (cancelled) return;
+        const running = all.filter((job) => job.status === "running");
+        const jobs = all.filter(
+          (job) => (job.status === "done" || job.status === "failed") && attachedJobRef.current?.id !== job.id,
+        );
+        // Remember running tasks so their chats show progress, and make sure each one has a chat with the prompt in it.
+        const runningMap = new Map();
+        for (const job of running) if (job.chatId) runningMap.set(job.chatId, job);
+        runningJobsRef.current = runningMap;
+        if (running.length) {
+          setChats((current) => {
+            let changed = false;
+            let next = [...current];
+            for (const job of running) {
+              if (!job.chatId) continue;
+              // The chat that is streaming right now already shows its prompt (possibly reworded by the orchestrator).
+              if (job.chatId === activeChatIdRef.current && busyRef.current && attachedJobRef.current?.id !== job.id) continue;
+              const idx = next.findIndex((chat) => chat.id === job.chatId);
+              if (idx >= 0) {
+                const chat = next[idx];
+                const last = (chat.messages || []).at(-1);
+                if (job.userText && !(last?.role === "user" && (last.content || "").trim() === job.userText.trim())) {
+                  next[idx] = { ...chat, messages: [...(chat.messages || []), { role: "user", content: job.userText }], agent: chat.agent || job.agentId || null };
+                  changed = true;
+                }
+              } else {
+                next = [
+                  {
+                    id: job.chatId,
+                    title: defaultChatTitle(job.userText || "Background task"),
+                    project: job.project || project,
+                    scope,
+                    mode,
+                    agent: job.agentId || null,
+                    interactionMode: WORKSPACE_MODES.manual,
+                    messages: job.userText ? [{ role: "user", content: job.userText }] : [],
+                    updatedAt: Date.now(),
+                  },
+                  ...next,
+                ];
+                changed = true;
+              }
+            }
+            if (changed) saveChats(user.uid, next);
+            return changed ? next : current;
+          });
+        }
+        setRunningJobsVersion((n) => n + 1);
+        if (!jobs.length) return;
         setChats((current) => {
           let next = [...current];
           for (const job of jobs) {
@@ -820,6 +876,108 @@ export function Workspace() {
       document.removeEventListener("visibilitychange", importBackgroundJobs);
     };
   }, [user?.uid]);
+
+  // When the open chat has a task still running on the server, show the thinking state and follow its progress live.
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    const jobsByChat = runningJobsRef.current;
+    if (!activeChatId) {
+      // Coming back to the app with a task running: open that chat so the user sees it working.
+      const first = [...jobsByChat.values()].find((job) => !autoOpenedJobsRef.current.has(job.id));
+      if (first && !busy && messagesRef.current.length === 0 && view === "home") {
+        autoOpenedJobsRef.current.add(first.id);
+        const chat = chats.find((item) => item.id === first.chatId);
+        if (chat) openChat(chat.id);
+      }
+      return undefined;
+    }
+    const job = jobsByChat.get(activeChatId);
+    if (!job || busy || attachedJobRef.current) return undefined;
+
+    const controller = new AbortController();
+    attachedJobRef.current = { id: job.id, chatId: job.chatId, controller };
+    autoOpenedJobsRef.current.add(job.id);
+    setBusy(true);
+    setStatus("");
+    if (job.agentId) setPendingAgent(job.agentId);
+    const lastMsg = messagesRef.current.at(-1);
+    if (job.userText && !(lastMsg?.role === "user" && (lastMsg.content || "").trim() === job.userText.trim())) {
+      setMessages([...messagesRef.current, { role: "user", content: job.userText }]);
+    }
+    const setProgress = progressSetterFor(job.agentId);
+    let finished = false;
+    attachJobStream(job.id, { onProgress: (event) => setProgress?.(event), signal: controller.signal })
+      .then((content) => {
+        finished = true;
+        setMessages([...messagesRef.current, { role: "assistant", content }]);
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        finished = true;
+        setMessages([...messagesRef.current, { role: "assistant", content: `This task couldn't finish: ${err.message}` }]);
+      })
+      .finally(() => {
+        if (controller.signal.aborted) return;
+        runningJobsRef.current.delete(job.chatId);
+        attachedJobRef.current = null;
+        ackJobs([job.id]);
+        clearAllProgress();
+        setBusy(false);
+      });
+    return undefined;
+  }, [activeChatId, runningJobsVersion, user?.uid]);
+
+  // Switching away from a chat that is being followed: detach (the result still lands in that chat later).
+  useEffect(() => {
+    const attached = attachedJobRef.current;
+    if (!attached || attached.chatId === activeChatId) return;
+    attached.controller.abort();
+    attachedJobRef.current = null;
+    clearAllProgress();
+    setBusy(false);
+  }, [activeChatId]);
+  useEffect(() => () => attachedJobRef.current?.controller.abort(), []);
+
+  function progressSetterFor(agentId) {
+    switch (agentId) {
+      case "site-audit": return setAuditProgress;
+      case "seo-blog-writer":
+      case "geo-blog-writer": return setBlogProgress;
+      case "humanization": return setHumanizeProgress;
+      case "ranking-opportunity-finder": return setRankingProgress;
+      case "keyword-finder": return setKeywordFinderProgress;
+      case "ai-visibility-tracker": return setAiVisibilityProgress;
+      case "brand-sentiment-analysis": return setBrandSentimentProgress;
+      case "competitor-research": return setCompetitorResearchProgress;
+      case "prompt-research": return setPromptResearchProgress;
+      case "serp-tracking": return setSerpTrackingProgress;
+      case "backlink-finder": return setBacklinkFinderProgress;
+      case "b2b-lead-finder": return setB2bLeadFinderProgress;
+      case "local-seo": return setLocalSeoProgress;
+      case "reels-creation": return setReelsCreationProgress;
+      case "site-integrations": return setSiteIntegrationsProgress;
+      default: return null;
+    }
+  }
+
+  function clearAllProgress() {
+    setAuditProgress(null);
+    setBlogProgress(null);
+    setHumanizeProgress(null);
+    setRankingProgress(null);
+    setKeywordFinderProgress(null);
+    setAiVisibilityProgress(null);
+    setBrandSentimentProgress(null);
+    setCompetitorResearchProgress(null);
+    setPromptResearchProgress(null);
+    setSerpTrackingProgress(null);
+    setBacklinkFinderProgress(null);
+    setB2bLeadFinderProgress(null);
+    setLocalSeoProgress(null);
+    setReelsCreationProgress(null);
+    setAiOrchestratorProgress(null);
+    setSiteIntegrationsProgress(null);
+  }
 
   function chooseProject(next) {
     if (next !== project) {
