@@ -2,11 +2,10 @@ import { AsyncLocalStorage } from "async_hooks";
 import { planOf } from "./team.js";
 import { PLANS } from "../../src/plans.js";
 
-const RANK = { free: 0, pro: 1, business: 2 };
+const RANK = { free: 0, pro: 1, business: 2, agency: 3 };
 
 /** Paid features and the cheapest plan that includes them. */
 export const FEATURES = {
-  reels: { plan: "pro", label: "Reels creation" },
   b2b: { plan: "pro", label: "B2B lead finder" },
   maxBlog: { plan: "pro", label: "Max-effort blogs" },
   scheduling: { plan: "pro", label: "Scheduled tasks" },
@@ -14,7 +13,6 @@ export const FEATURES = {
 };
 
 export const AGENT_FEATURES = {
-  "/api/reels-creation": "reels",
   "/api/b2b-lead-finder": "b2b",
 };
 

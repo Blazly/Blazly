@@ -22,7 +22,7 @@ export function formatAuditProgressLabel(progress) {
     return `Site audit · page ${progress.current}/${auditTotal} · 209 checks · ${etaLabel}`;
   }
   if (discovered > 0 && progress.phase === "sitemap") {
-    return `Site audit · mapping up to 100 pages · ${etaLabel}`;
+    return `Site audit · mapping pages · ${etaLabel}`;
   }
   const message = progress.message || "Starting crawl";
   return `Site audit · ${message} · ${etaLabel}`;
@@ -196,19 +196,6 @@ export function formatLocalSeoProgressLabel(progress) {
   return `Local SEO · ${label}`;
 }
 
-const REELS_CREATION_STAGE_LABELS = {
-  prompt: "Preparing prompt",
-  generate: "Generating 1080p reel (up to 10s)",
-  save: "Saving video",
-};
-
-export function formatReelsCreationProgressLabel(progress) {
-  if (!progress) return "Creating reel";
-  const label =
-    REELS_CREATION_STAGE_LABELS[progress.stage] || progress.message || "Creating reel";
-  return `Reels creation · ${label}`;
-}
-
 export function formatHumanizeProgressLabel(progress) {
   if (!progress) return "Humanizing content";
   const label = progress.message || "Humanizing tone and flow";
@@ -239,12 +226,10 @@ export function thinkingLabel(
   backlinkFinderProgress,
   b2bLeadFinderProgress,
   localSeoProgress,
-  reelsCreationProgress,
   aiOrchestratorProgress,
 ) {
   if (aiOrchestratorProgress) return formatAiOrchestratorProgressLabel(aiOrchestratorProgress);
   if (auditProgress) return formatAuditProgressLabel(auditProgress);
-  if (reelsCreationProgress) return formatReelsCreationProgressLabel(reelsCreationProgress);
   if (localSeoProgress) return formatLocalSeoProgressLabel(localSeoProgress);
   if (b2bLeadFinderProgress) return formatB2bLeadFinderProgressLabel(b2bLeadFinderProgress);
   if (backlinkFinderProgress) return formatBacklinkFinderProgressLabel(backlinkFinderProgress);

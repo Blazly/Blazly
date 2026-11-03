@@ -92,6 +92,17 @@ function trackOutcome(res, onDone) {
   res.on("close", () => finish(true));
 }
 
+/** True when the payer has (or had) teammates, so usage rows should say who ran them. */
+async function getTeamSafe(payerUid) {
+  try {
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const snap = await getFirestore().collection("teams").doc(payerUid).get();
+    return snap.exists && (snap.data().members || []).length ? snap.data() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function attachCredits(server) {
   server.middlewares.use(async (req, res, next) => {
     const path = (req.url || "").split("?")[0];
@@ -101,7 +112,16 @@ export function attachCredits(server) {
         const who = await identify(req);
         if (!who) return sendJson(res, 401, { error: "Sign in to see your credits." });
         const billing = await resolveBilling(who.uid);
-        const transactions = await recentTransactions(billing.billingUid);
+        let transactions = await recentTransactions(billing.billingUid);
+        const team = await getTeamSafe(billing.billingUid);
+        if (team) {
+          const { actorNames } = await import("../sharedProjects.js");
+          const names = await actorNames(transactions.map((t) => t.actorUid || billing.billingUid));
+          transactions = transactions.map((t) => {
+            const actor = t.actorUid || billing.billingUid;
+            return { ...t, actorUid: actor, actorName: actor === who.uid ? "You" : names[actor] || "Teammate" };
+          });
+        }
         return sendJson(res, 200, { ...billing.account, plan: billing.plan, teamOwner: billing.teamOwner, transactions });
       } catch (error) {
         return sendJson(res, 500, { error: error.message || "Could not load credits." });
@@ -132,11 +152,12 @@ export function attachCredits(server) {
         enforceLimit(`agent:h:${payer}`, limits.agentRunsPerHour, HOUR, "Agent run");
         enforceLimit(`agent:d:${payer}`, limits.agentRunsPerDay, DAY, "Daily agent run");
       }
-      ({ txId, reserved } = await reserveCredits(payer, pricing.reserve(), {
+      ({ txId, reserved } = await reserveCredits(payer, pricing.reserve(plan), {
         agent: pricing.agent,
         label: pricing.label,
         source: payer === who.uid ? who.source : `${who.source}:team-member:${who.uid}`,
         minimum: pricing.minimum,
+        actorUid: who.uid,
       }));
     } catch (error) {
       return sendJson(res, error.status || 500, {

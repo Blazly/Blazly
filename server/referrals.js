@@ -5,7 +5,8 @@ import { adminAuth } from "./firebaseAdmin.js";
 import { identify } from "./credits/middleware.js";
 import { grantCredits } from "./credits/store.js";
 
-export const REFERRAL_REWARD = 100;
+/** Paid to the referrer once, when the referred user makes their first payment (plan or top-up). */
+export const REFERRAL_REWARD = 250;
 const NEW_ACCOUNT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function db() {
@@ -56,20 +57,33 @@ async function claim(newUid, rawCode) {
   const fresh = await db().runTransaction(async (tx) => {
     if ((await tx.get(claimRef)).exists) return false;
     tx.set(claimRef, { referrerUid, code, createdAt: FieldValue.serverTimestamp() });
-    tx.set(
-      db().collection("referrals").doc(referrerUid),
-      { joined: FieldValue.increment(1), earned: FieldValue.increment(REFERRAL_REWARD) },
-      { merge: true },
-    );
+    tx.set(db().collection("referrals").doc(referrerUid), { joined: FieldValue.increment(1) }, { merge: true });
     return true;
   });
   if (!fresh) return { ok: false, reason: "already_claimed" };
-
-  await grantCredits(referrerUid, REFERRAL_REWARD, {
-    eventId: `referral_${newUid}`,
-    label: `Referral bonus: ${user.email || "new user"} joined`,
-  });
   return { ok: true };
+}
+
+export async function rewardReferralOnPayment(paidUid) {
+  const claimRef = db().collection("referralClaims").doc(paidUid);
+  const referrerUid = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(claimRef);
+    if (!snap.exists || snap.data().rewardedAt) return null;
+    const { referrerUid: uid } = snap.data();
+    tx.update(claimRef, { rewardedAt: FieldValue.serverTimestamp() });
+    tx.set(
+      db().collection("referrals").doc(uid),
+      { paid: FieldValue.increment(1), earned: FieldValue.increment(REFERRAL_REWARD) },
+      { merge: true },
+    );
+    return uid;
+  });
+  if (!referrerUid) return;
+  const user = await adminAuth().getUser(paidUid).catch(() => null);
+  await grantCredits(referrerUid, REFERRAL_REWARD, {
+    eventId: `referral_paid_${paidUid}`,
+    label: `Referral bonus: ${user?.email || "a friend"} upgraded`,
+  });
 }
 
 export function attachReferrals(server) {
@@ -85,6 +99,7 @@ export function attachReferrals(server) {
         return sendJson(res, 200, {
           code: info.code,
           joined: info.joined || 0,
+          paid: info.paid || 0,
           earned: info.earned || 0,
           reward: REFERRAL_REWARD,
         });

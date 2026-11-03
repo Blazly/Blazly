@@ -44,6 +44,13 @@ function trimKnowledge(knowledge) {
   return { companyName, brandName, website, summary, description, audience, tone, products, services };
 }
 
+function trimArticle(article) {
+  const html = String(article?.html || "");
+  if (!html || html.length > 800_000) return null;
+  const text = (value, max) => String(value || "").slice(0, max);
+  return { title: text(article.title, 300), html, metaDescription: text(article.metaDescription, 500), slug: text(article.slug, 200) };
+}
+
 export async function createJob(input) {
   const uid = String(input.uid || "").trim();
   if (!uid) throw fail("Sign in to schedule tasks.", 401);
@@ -96,6 +103,7 @@ export async function createJob(input) {
     website: String(input.website || "").trim(),
     brandName: String(input.brandName || "").trim(),
     knowledge: trimKnowledge(input.knowledge),
+    article: trimArticle(input.article),
     timezone: String(input.timezone || "UTC").slice(0, 64),
     runAt: runAt.toISOString(),
     nextRunAt: runAt.toISOString(),
@@ -135,7 +143,7 @@ export async function listUserJobs(uid, project) {
 }
 
 function publicJob(job) {
-  const { knowledge, lockUntil, uid, ...rest } = job;
+  const { knowledge, article, lockUntil, uid, ...rest } = job;
   return rest;
 }
 

@@ -5,6 +5,8 @@ import { describeProjects, editProject, ensureProject, removeProject, syncProjec
 import { deleteProjectIntegrations, renameProjectIntegrations, setProvider } from "../integrations/store.js";
 import { renameKeysProject } from "../publicMcp/keys.js";
 import { acceptInvite, getTeam, inviteMember, leaveTeam, removeMember } from "./team.js";
+import { getCreditAccount } from "../credits/store.js";
+import { removeFromAllShares } from "../sharedProjects.js";
 
 function sendJson(res, status, body) {
   res.statusCode = status;
@@ -52,12 +54,18 @@ const ROUTES = {
     return { email: invite.email, link, emailed };
   },
   "POST /api/team/remove": async (who, body) => {
-    await removeMember(who.uid, body.email);
+    const team = await getTeam(who.uid);
+    const target = String(body.uid || body.email || "").trim();
+    const member = (team.members || []).find((m) => m.uid === target || m.email === target.toLowerCase());
+    await removeMember(who.uid, member?.uid || target);
+    if (member) await removeFromAllShares(who.uid, member.uid);
     return { ok: true };
   },
   "POST /api/team/accept": (who, body) => acceptInvite(who.uid, String(body.token || "")),
   "POST /api/team/leave": async (who) => {
+    const { teamOwner } = await getCreditAccount(who.uid);
     await leaveTeam(who.uid);
+    if (teamOwner) await removeFromAllShares(teamOwner, who.uid);
     return { ok: true };
   },
   "GET /api/projects": (who) => describeProjects(who.uid),

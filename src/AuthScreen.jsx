@@ -1,14 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext.jsx";
+import { BUSINESS_EMAIL_MESSAGE, isPersonalEmail } from "./businessEmail.js";
 import { BrandLogo } from "./BrandLogo.jsx";
-import { Icon } from "./Icon.jsx";
-
-const AUTH_HIGHLIGHTS = [
-  { icon: "hash", title: "Keyword research", body: "Volume, difficulty, and a six-month trend." },
-  { icon: "fileText", title: "Content that ranks", body: "SEO and GEO articles, humanized and fact-checked." },
-  { icon: "eye", title: "AI visibility", body: "Where ChatGPT, Gemini, Claude, and Grok mention you." },
-  { icon: "smile", title: "Brand sentiment", body: "Trust and recommendations, with the sources behind them." },
-];
 
 const COPY = {
   login: {
@@ -22,7 +15,7 @@ const COPY = {
   signup: {
     eyebrow: "GET STARTED",
     title: "Create your account",
-    sub: "A workspace for the SEO and GEO work on each project.",
+    sub: "Your Marketing Team, Powered by 15 AI Agents.",
     submit: "Create account",
     switch: "Already have an account?",
     action: "Log in",
@@ -121,6 +114,10 @@ export function AuthScreen() {
       setError("Enter the 6-digit code from your email.");
       return;
     }
+    if ((mode === "signup" || mode === "verify") && isPersonalEmail(trimmedEmail)) {
+      setError(BUSINESS_EMAIL_MESSAGE);
+      return;
+    }
     setBusy(true);
     try {
       if (mode === "signup") {
@@ -165,14 +162,14 @@ export function AuthScreen() {
     try {
       await signInWithGoogle();
     } catch (err) {
-      setError(authMessage(err?.code, { google: true }));
+      setError(err?.code === "blazly/personal-email" ? BUSINESS_EMAIL_MESSAGE : authMessage(err?.code, { google: true }));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="auth-page">
+    <div className="auth-page is-solo">
       <div className="auth-main">
         <div className="auth-top">
           <BrandLogo className="auth-brand" size={30} withText />
@@ -279,47 +276,6 @@ export function AuthScreen() {
         </form>
         <p className="auth-legal">© {new Date().getFullYear()} Blazly</p>
       </div>
-
-      <aside className="auth-aside" aria-hidden="true">
-        <div className="auth-aside-inner">
-          <h2 className="auth-aside-title">Marketing answers, grounded in live search data.</h2>
-          <p className="auth-aside-lead">
-            Ask in plain language. Blazly runs the audit, pulls the numbers, and writes the brief for your brand.
-          </p>
-          <div className="auth-demo">
-            <div className="auth-demo-pill">
-              <span className="auth-demo-pill-icon">
-                <Icon name="clipboardCheck" size={15} />
-              </span>
-              <strong>Site Audit</strong>
-              <span>209 checks · 19 categories · 100 pages</span>
-            </div>
-            <p className="auth-demo-text">
-              Website URL: https://yourbrand.com
-              <span className="auth-demo-caret" />
-            </p>
-            <div className="auth-demo-bar">
-              <span className="auth-demo-plus">
-                <Icon name="plus" size={18} />
-              </span>
-              <span className="auth-demo-send">
-                <Icon name="arrowUp" size={18} strokeWidth={2.2} />
-              </span>
-            </div>
-          </div>
-          <ul className="auth-aside-list">
-            {AUTH_HIGHLIGHTS.map((item) => (
-              <li key={item.title}>
-                <Icon name={item.icon} size={18} />
-                <span>
-                  <strong>{item.title}</strong>
-                  {item.body}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </aside>
     </div>
   );
 }

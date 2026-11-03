@@ -10,6 +10,7 @@ export const PLANS = {
     creditsNote: "500 one-time credits",
     projects: 1,
     seats: 1,
+    auditPages: 10,
     topupPer100: null,
     aiChainSteps: 2,
     limits: { agentRunsPerHour: 15, agentRunsPerDay: 60, chatPerHour: 60, mcpPerMinute: 0, activeSchedules: 0, concurrentJobs: 2 },
@@ -19,7 +20,7 @@ export const PLANS = {
       "Keyword research",
       "SERP rank tracking",
       "Ranking opportunity finder",
-      "Full site audit",
+      "Full site audit (up to 10 main pages)",
       "AI visibility tracker (ChatGPT, Gemini, Grok)",
       "Prompt research",
       "Brand sentiment analysis",
@@ -32,7 +33,7 @@ export const PLANS = {
       "1 project with brand profile and logo",
       "Chat history and file exports",
     ],
-    excluded: ["Scheduling", "MCP / Connect AI tools", "B2B leads", "Max-effort blogs", "Reels creation", "Editing or deleting projects"],
+    excluded: ["Scheduling", "MCP / Connect AI tools", "B2B leads", "Max-effort blogs", "Editing or deleting projects"],
   },
   pro: {
     id: "pro",
@@ -44,15 +45,16 @@ export const PLANS = {
     creditsNote: "1,500 credits / month",
     projects: 3,
     seats: 1,
+    auditPages: 50,
     topupPer100: 2,
     aiChainSteps: 4,
     limits: { agentRunsPerHour: 60, agentRunsPerDay: 400, chatPerHour: 300, mcpPerMinute: 60, activeSchedules: 20, concurrentJobs: 5 },
     popular: true,
     features: [
       "Everything in Free, plus:",
+      "Site audits up to 50 main pages",
       "1,500 credits every month (unused credits roll over)",
       "Chain up to 4 agents in one scheduled task",
-      "Reels creation (10-second video clips)",
       "Blog writer at max effort (long-form, deeper research)",
       "B2B lead finder with verified emails",
       "Scheduled tasks up to 30 days ahead",
@@ -62,7 +64,6 @@ export const PLANS = {
       "Connect Blazly to Claude, ChatGPT, Cursor and Lovable (MCP)",
       "Personal API keys for AI tools",
       "3 projects — edit name or website (once every 30 days) and delete",
-      "Top-ups at $2 / 100 credits",
       "Email support",
     ],
     excluded: [],
@@ -77,17 +78,44 @@ export const PLANS = {
     creditsNote: "5,500 credits / month",
     projects: 10,
     seats: 3,
+    auditPages: 100,
     topupPer100: 1.8,
     aiChainSteps: 4,
     limits: { agentRunsPerHour: 200, agentRunsPerDay: 1500, chatPerHour: 1000, mcpPerMinute: 120, activeSchedules: 100, concurrentJobs: 15 },
     features: [
       "Everything in Pro, plus:",
+      "Site audits up to 100 main pages",
       "5,500 credits every month (unused credits roll over)",
       "10 projects for multiple brands or clients — edit or delete anytime (30-day cooldown per change)",
-      "3 team seats",
+      "3 teammate seats (owner not counted)",
       "Higher scheduling limits for every project",
       "MCP API keys per project",
-      "Cheaper top-ups at $1.80 / 100 credits",
+      "Priority support",
+      "Early access to new agents",
+    ],
+    excluded: [],
+  },
+  agency: {
+    id: "agency",
+    name: "Agency",
+    tagline: "For agencies running SEO and content for many clients.",
+    monthly: 199,
+    annual: 1990,
+    credits: 12000,
+    creditsNote: "12,000 credits / month",
+    projects: 25,
+    seats: 10,
+    auditPages: 300,
+    topupPer100: 1.8,
+    aiChainSteps: 4,
+    limits: { agentRunsPerHour: 500, agentRunsPerDay: 4000, chatPerHour: 2500, mcpPerMinute: 300, activeSchedules: 300, concurrentJobs: 40 },
+    features: [
+      "Everything in Business, plus:",
+      "Site audits up to 300 main pages",
+      "12,000 credits every month (unused credits roll over)",
+      "25 projects for client brands — edit or delete anytime (30-day cooldown per change)",
+      "10 teammate seats (owner not counted)",
+      "Highest usage and scheduling limits",
       "Priority support",
       "Early access to new agents",
     ],
@@ -95,11 +123,17 @@ export const PLANS = {
   },
 };
 
-export const PLAN_ORDER = ["free", "pro", "business"];
+export const PLAN_ORDER = ["free", "pro", "business", "agency"];
 
-export const TOPUP_PACKS = [100, 500, 1000, 2500];
+/** Top-up packs and their fixed USD price, the same on every paid plan. */
+export const TOPUP_PRICES = { 100: 4, 1000: 30, 10000: 200, 20000: 390 };
+
+export const TOPUP_PACKS = Object.keys(TOPUP_PRICES).map(Number);
+
+export function auditPageLimit(planId) {
+  return PLANS[planId]?.auditPages || PLANS.free.auditPages;
+}
 
 export function topupPrice(planId, credits) {
-  const per100 = PLANS[planId]?.topupPer100;
-  return per100 ? Math.round(per100 * (credits / 100) * 100) / 100 : null;
+  return PLANS[planId]?.topupPer100 ? TOPUP_PRICES[credits] ?? null : null;
 }

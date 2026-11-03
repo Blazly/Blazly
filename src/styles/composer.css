@@ -375,6 +375,83 @@
   animation: rise-in var(--t) var(--ease-out);
 }
 
+.composer-add {
+  position: relative;
+}
+
+.composer-add-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: 260px;
+  max-height: min(420px, 60vh);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.12);
+  animation: rise-in var(--t) var(--ease-out);
+}
+
+.composer-add-label {
+  margin: 8px 8px 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3, var(--ink-2));
+}
+
+.composer-add-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--ink);
+}
+
+.composer-add-item span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-add-item:hover {
+  background: var(--accent-wash);
+}
+
+.composer-add-item.is-active {
+  background: var(--accent-wash);
+  font-weight: 600;
+}
+
+.composer-agent-reuse {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin: 10px 10px 0;
+  padding: 5px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.composer-agent-reuse:hover {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--ink);
+}
+
 .composer-agent-pill-icon {
   display: grid;
   place-items: center;
@@ -447,4 +524,19 @@
     right: -44px;
     width: min(288px, calc(100vw - 32px));
   }
+}
+
+/* Selected agent uses its brand color */
+.composer.has-agent .composer-agent-pill {
+  background: color-mix(in srgb, var(--agent-c) 9%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--agent-c) 22%, transparent);
+}
+.composer.has-agent .composer-agent-pill-icon {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--agent-c) 70%, #fff), var(--agent-c));
+  color: #fff;
+  box-shadow: 0 4px 10px -6px var(--agent-c);
+}
+.composer.has-agent .composer-send:not(.is-idle):not(:disabled) {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--agent-c) 70%, #fff), var(--agent-c));
+  color: #fff;
 }

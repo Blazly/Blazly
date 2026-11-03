@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ChatThinking, thinkingLabel } from "./ChatThinking.jsx";
 import { firstUrlInText, messageLooksLikeSiteAuditUrl, runSiteAuditStream } from "./siteAuditClient.js";
 import {
@@ -91,17 +91,6 @@ import {
   runLocalSeoStream,
   shouldRunLocalSeo,
 } from "./localSeoClient.js";
-import {
-  extractReelStateFromMessages,
-  isContinueReelSetup,
-  isEmptyReelsCreationBrief,
-  looksLikeReelsCreationBrief,
-  parseReelsCreationBrief,
-
-  reelsCreationBriefPrefill,
-  runReelsCreationStream,
-  shouldRunReelsCreation,
-} from "./reelsCreationClient.js";
 import { ArticleEditor } from "./ArticleEditor.jsx";
 import { ShareChatButton } from "./ShareChatButton.jsx";
 import {
@@ -114,13 +103,20 @@ import { ChatAuditDock } from "./ChatAuditDock.jsx";
 import { streamAssistantReply } from "./streamChat.js";
 import {
   formatOrchestratorClarify,
+  agentTitle,
   formatOrchestratorDispatchIntro,
+  formatPlanSteps,
+  runAiChain,
   routeAiObjective,
 } from "./aiOrchestratorClient.js";
 import { loadWorkspaceMode, saveWorkspaceMode, WORKSPACE_MODES } from "./workspaceMode.js";
 import { WorkspaceModeToggle } from "./WorkspaceModeToggle.jsx";
 import { IntegrationsView } from "./IntegrationsView.jsx";
 import {
+  FOLLOW_UP,
+  SITE_INTEGRATIONS_BRIEF,
+  integrationFollowUp,
+  isEmptySiteIntegrationsBrief,
   runSiteIntegrationsStream,
 } from "./integrationsClient.js";
 import { Icon } from "./Icon.jsx";
@@ -138,7 +134,6 @@ import { ChatNavItem } from "./ChatNavItem.jsx";
 import {
   attachmentKey,
   buildUserMessagePayload,
-  isVideoAttachmentFile,
   stripMessagesForStorage,
   validateAttachmentFile,
 } from "./chatAttachments.js";
@@ -157,6 +152,7 @@ import { ConnectAiView } from "./ConnectAiView.jsx";
 import { PricingView } from "./PricingView.jsx";
 import { DiscussionsView } from "./DiscussionsView.jsx";
 import { ReferralModal } from "./ReferralModal.jsx";
+import { OutOfCreditsModal } from "./OutOfCreditsModal.jsx";
 import { PLANS } from "./plans.js";
 import { claimPendingReferral } from "./referralClient.js";
 import { acceptPendingTeamInvite, deleteProjectOnServer, editProjectOnServer, registerProject, syncProjectsWithServer } from "./accountClient.js";
@@ -170,10 +166,28 @@ import {
   saveImportedRunIds,
 } from "./schedulesClient.js";
 import { useAuth } from "./AuthContext.jsx";
+import { Ga4WorkspaceTracker } from "./Ga4Tracker.jsx";
 import { ackJobs, attachJobStream, CONNECTION_LOST_STATUS, fetchPendingJobs, isConnectionError, setJobContext } from "./jobsClient.js";
-import { saveProject } from "./firebase.js";
+import { fetchCredits, saveProject } from "./firebase.js";
+import { ProjectShareModal } from "./ProjectShareModal.jsx";
+import {
+  chatFingerprint,
+  deleteSharedChat,
+  fetchSharedChat,
+  fetchSharedProjects,
+  joinPendingProject,
+  leaveSharedProject,
+  pushSharedChat,
+  stopSharingProject,
+  updateSharedProject,
+} from "./sharedProjectsClient.js";
+
+import { stripUiBlocks } from "./parseAssistantUi.js";
 
 const MODES = ["Auto", "Fast", "Deep"];
+function withFollowUp(reply, followUp) {
+  return followUp ? `${reply}\n\n${followUp}` : reply;
+}
 
 const SCOPE_LABELS = {
   seo: "SEO",
@@ -188,8 +202,8 @@ const AGENTS = [
   {
     id: "site-audit",
     title: "Site Audit",
-    body: "209 checks across 19 categories per page (up to 100 URLs), plus off-page authority.",
-    chipHint: "209 checks · 19 categories · 100 pages",
+    body: "209 checks across 19 categories per page (10–300 pages depending on your plan), plus off-page authority.",
+    chipHint: "209 checks · 19 categories · up to 300 pages",
     scope: "seo",
     icon: "clipboardCheck",
   },
@@ -208,14 +222,6 @@ const AGENTS = [
     chipHint: "AI citations · TL;DR · Max mode",
     scope: "geo",
     icon: "newspaper",
-  },
-  {
-    id: "reels-creation",
-    title: "Reels creation",
-    body: "Describe a vertical reel (1080p, 9:16). Each reel is a single clip of up to 10 seconds. Optional: attach a person photo as reference.",
-    chipHint: "10s clips · 1080p vertical",
-    scope: "content",
-    icon: "film",
   },
   {
     id: "humanization",
@@ -318,7 +324,7 @@ const AGENTS = [
 const AGENT_GROUP_IDS = [
   {
     id: "research",
-    label: "Research & audits",
+    label: "SEO Agents",
     agentIds: [
       "site-audit",
       "keyword-finder",
@@ -327,32 +333,33 @@ const AGENT_GROUP_IDS = [
       "competitor-research",
       "backlink-finder",
       "b2b-lead-finder",
+      "local-seo",
     ],
   },
   {
-    id: "local",
-    label: "Local SEO",
-    agentIds: ["local-seo"],
-  },
-  {
     id: "content",
-    label: "Content",
-    agentIds: ["seo-blog-writer", "geo-blog-writer", "reels-creation", "humanization"],
+    label: "Content Writing Agents",
+    agentIds: ["seo-blog-writer", "geo-blog-writer", "humanization"],
   },
   {
     id: "site",
-    label: "Your website",
+    label: "Growth Data Assistant",
     agentIds: ["site-integrations"],
   },
   {
     id: "ai-search",
-    label: "AI search visibility",
+    label: "GEO Agents",
     agentIds: ["prompt-research", "ai-visibility-tracker", "brand-sentiment-analysis"],
   },
 ];
 
 const GROUPED_AGENT_IDS = new Set(AGENT_GROUP_IDS.flatMap((group) => group.agentIds));
 const UNGROUPED_AGENTS = AGENTS.filter((agent) => !GROUPED_AGENT_IDS.has(agent.id));
+
+/** Brand palette from the Blazly bolt logo, cycled across agent cards. */
+const BRAND_COLORS = ["#F72585", "#FF7A1A", "#E8A800", "#B517E8", "#3D3DF5", "#0EA5E9"];
+const agentColor = (id) => BRAND_COLORS[Math.max(0, AGENTS.findIndex((a) => a.id === id)) % BRAND_COLORS.length];
+for (const agent of AGENTS) agent.color = agentColor(agent.id);
 
 const AGENT_GROUPS = [
   ...AGENT_GROUP_IDS.map((group) => ({
@@ -449,6 +456,24 @@ export function Workspace() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [referralOpen, setReferralOpen] = useState(false);
+  const [outOfCreditsOpen, setOutOfCreditsOpen] = useState(false);
+  const creditPlan = credits?.data?.plan || "free";
+  const creditBalance = credits?.data?.balance;
+  const lastBalanceRef = useRef(null);
+  useEffect(() => {
+    const onOut = () => creditPlan !== "free" && setOutOfCreditsOpen(true);
+    window.addEventListener("blazly:out-of-credits", onOut);
+    return () => window.removeEventListener("blazly:out-of-credits", onOut);
+  }, [creditPlan]);
+  useEffect(() => {
+    if (typeof creditBalance !== "number") return;
+    const previous = lastBalanceRef.current;
+    lastBalanceRef.current = creditBalance;
+    if (creditPlan !== "free" && creditBalance <= 0 && previous > 0) setOutOfCreditsOpen(true);
+  }, [creditBalance, creditPlan]);
+  const [sharedProjects, setSharedProjects] = useState([]);
+  const [shareModalProject, setShareModalProject] = useState(null);
+  const [projectsNotice, setProjectsNotice] = useState(null);
   const [scope, setScope] = useState("geo");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState([]);
@@ -468,6 +493,12 @@ export function Workspace() {
   const [articleEditorOpen, setArticleEditorOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [pendingAgent, setPendingAgent] = useState(null);
+  const [lastAgentId, setLastAgentId] = useState(null);
+
+  function releaseAgent(id) {
+    setPendingAgent(null);
+    setLastAgentId(id);
+  }
   const [auditProgress, setAuditProgress] = useState(null);
   const [blogProgress, setBlogProgress] = useState(null);
   const [humanizeProgress, setHumanizeProgress] = useState(null);
@@ -484,7 +515,6 @@ export function Workspace() {
   const [backlinkFinderProgress, setBacklinkFinderProgress] = useState(null);
   const [b2bLeadFinderProgress, setB2bLeadFinderProgress] = useState(null);
   const [localSeoProgress, setLocalSeoProgress] = useState(null);
-  const [reelsCreationProgress, setReelsCreationProgress] = useState(null);
   const [workspaceMode, setWorkspaceMode] = useState(() => loadWorkspaceMode());
   const [aiOrchestratorProgress, setAiOrchestratorProgress] = useState(null);
   const fileRef = useRef(null);
@@ -493,6 +523,7 @@ export function Workspace() {
   const threadRef = useRef(null);
   const messagesRef = useRef([]);
   const activeChatIdRef = useRef(null);
+  const awaitingPublishTimeRef = useRef(null);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -534,6 +565,7 @@ export function Workspace() {
     () => projects.find((entry) => entry.name === project) || null,
     [projects, project]
   );
+  const ownProjects = projects.filter((entry) => !entry.shared);
 
   function activeProjectContext() {
     const website =
@@ -552,6 +584,7 @@ export function Workspace() {
 
   const projectCards = projects.map((entry) => {
     const site = projectDisplayWebsite(entry);
+    const share = entry.shareId ? sharedProjects.find((item) => item.id === entry.shareId) : null;
     const chatCount = chats.filter((chat) => chatProject(chat) === entry.name).length;
     const chatLabel = chatCount ? `${chatCount} saved chat${chatCount === 1 ? "" : "s"}` : "No chats yet";
     return {
@@ -560,6 +593,9 @@ export function Workspace() {
       website: websiteHost(site),
       fullWebsite: site,
       status: entry.name === project ? `Active · ${chatLabel}` : chatLabel,
+      sharedBy: entry.shared?.ownerName || "",
+      shareId: entry.shareId || "",
+      memberCount: share?.members?.length || 0,
     };
   });
 
@@ -660,9 +696,244 @@ export function Workspace() {
       setAccountNotice(notice);
       setView("profile");
     });
+    joinPendingProject().then(async (result) => {
+      if (!result) return;
+      setOpenedProject(null);
+      setView("projects");
+      if (result.error) {
+        setProjectsNotice({ tone: "error", text: result.error });
+        return;
+      }
+      const joined = result.project;
+      setProjectsNotice({
+        tone: "success",
+        text:
+          joined.role === "owner"
+            ? `That's the share link for your own project “${joined.name}”.`
+            : `You joined “${joined.name}”. You can see its chats and run agents on ${joined.ownerName || "the owner"}'s credits.`,
+      });
+      await refreshSharedRef.current?.();
+      credits.refresh();
+      const entry = projectsRef.current.find((item) => item.shareId === joined.id);
+      if (entry) chooseProject(entry.name);
+    });
   }, [user?.uid]);
 
-  const projectNamesKey = projects.map((entry) => `${entry.name}\u0001${projectDisplayWebsite(entry)}`).join("\u0000");
+  /* ---------- Shared projects: teammates' chats live on the server ---------- */
+  const chatsRef = useRef(chats);
+  chatsRef.current = chats;
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
+  const sharedListRef = useRef([]);
+  // chatId -> { updatedAt, fp } of the last version known to be on the server.
+  const sharedSyncRef = useRef(new Map());
+  const sharedReadyRef = useRef(false);
+  const refreshSharedRef = useRef(null);
+
+  refreshSharedRef.current = async function refreshShared() {
+    if (!user?.uid) return;
+    const startedAt = Date.now();
+    let list;
+    try {
+      list = await fetchSharedProjects();
+    } catch {
+      return;
+    }
+    sharedListRef.current = list;
+    setSharedProjects(list);
+    const merged = mergeSharedProjects(projectsRef.current, list);
+    if (merged !== projectsRef.current) {
+      projectsRef.current = merged;
+      setProjects((current) => mergeSharedProjects(current, list));
+    }
+    const nameByShare = new Map(merged.filter((entry) => entry.shareId).map((entry) => [entry.shareId, entry.name]));
+    const memberShareIds = new Set(list.filter((s) => s.role === "member").map((s) => s.id));
+    const ownerShareByName = new Map(list.filter((s) => s.role === "owner").map((s) => [s.name, s.id]));
+    const serverChats = new Map(list.map((s) => [s.id, new Set((s.chats || []).map((c) => c.id))]));
+    const localById = new Map(chatsRef.current.map((c) => [c.id, c]));
+    const sync = sharedSyncRef.current;
+
+    const wanted = [];
+    for (const share of list) {
+      for (const summary of share.chats || []) {
+        const known = sync.get(summary.id);
+        const local = localById.get(summary.id);
+        if (known?.updatedAt === summary.updatedAt && local) continue;
+        if (summary.id === activeChatIdRef.current && busyRef.current) continue;
+        // Unsaved local messages: the next save merges with the server copy instead.
+        if (known?.pushing || (known && local && chatFingerprint(local.messages) !== known.fp)) continue;
+        wanted.push([share.id, summary.id]);
+      }
+    }
+    const fetched = (
+      await Promise.all(
+        wanted.map(([shareId, chatId]) =>
+          fetchSharedChat(shareId, chatId)
+            .then((chat) => ({ shareId, chat }))
+            .catch(() => null),
+        ),
+      )
+    ).filter(Boolean);
+    for (const { chat } of fetched) sync.set(chat.id, { updatedAt: chat.updatedAt, fp: chatFingerprint(chat.messages), at: Date.now() });
+    const fetchedById = new Map(fetched.map((item) => [item.chat.id, item]));
+
+    setChats((current) => {
+      let changed = false;
+      const next = [];
+      for (const chat of current) {
+        const remote = fetchedById.get(chat.id);
+        if (remote) continue;
+        const shareId = chat.sharedProjectId || ownerShareByName.get(chat.project || projectsRef.current[0]?.name);
+        if (!shareId) {
+          next.push(chat);
+          continue;
+        }
+        const isActiveBusy = chat.id === activeChatIdRef.current && busyRef.current;
+        const ids = serverChats.get(shareId);
+        if (!ids) {
+          // Sharing ended: teammates lose the chats, the owner keeps them as normal chats.
+          changed = true;
+          sync.delete(chat.id);
+          if (chat.sharedRole === "member" && !isActiveBusy) continue;
+          const { sharedProjectId: _s, sharedRole: _r, ...rest } = chat;
+          next.push(rest);
+          continue;
+        }
+        if (!ids.has(chat.id) && sync.get(chat.id)?.at < startedAt && !isActiveBusy) {
+          changed = true;
+          sync.delete(chat.id);
+          continue;
+        }
+        if (chat.sharedProjectId !== shareId) {
+          changed = true;
+          next.push({ ...chat, sharedProjectId: shareId, sharedRole: memberShareIds.has(shareId) ? "member" : "owner" });
+        } else next.push(chat);
+      }
+      for (const { shareId, chat: remote } of fetched) {
+        const existing = current.find((chat) => chat.id === remote.id);
+        changed = true;
+        next.push({
+          ...(existing || {}),
+          id: remote.id,
+          title: remote.title,
+          agent: remote.agent || existing?.agent || null,
+          interactionMode: remote.interactionMode || existing?.interactionMode,
+          scope: remote.scope || existing?.scope,
+          mode: remote.mode || existing?.mode,
+          messages: remote.messages,
+          project: nameByShare.get(shareId) || existing?.project,
+          sharedProjectId: shareId,
+          sharedRole: memberShareIds.has(shareId) ? "member" : "owner",
+          updatedAt: Math.max(existing?.updatedAt || 0, remote.updatedAt),
+        });
+      }
+      if (!changed) return current;
+      next.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      saveChats(user.uid, next);
+      return next;
+    });
+    const activeRemote = fetchedById.get(activeChatIdRef.current);
+    if (activeRemote && !busyRef.current) setMessages(activeRemote.chat.messages);
+    if (activeChatIdRef.current && !busyRef.current) {
+      const activeLocal = chatsRef.current.find((chat) => chat.id === activeChatIdRef.current);
+      const ids = activeLocal?.sharedProjectId ? serverChats.get(activeLocal.sharedProjectId) : null;
+      if (activeLocal?.sharedRole === "member" && sync.get(activeLocal.id)?.at < startedAt && (!ids || !ids.has(activeLocal.id))) {
+        startNewChat();
+      }
+    }
+    sharedReadyRef.current = true;
+  };
+
+  useEffect(() => {
+    if (!user?.uid) {
+      sharedListRef.current = [];
+      sharedSyncRef.current = new Map();
+      sharedReadyRef.current = false;
+      setSharedProjects([]);
+      return undefined;
+    }
+    const tick = () => {
+      if (document.visibilityState === "visible") refreshSharedRef.current?.();
+    };
+    tick();
+    // Only poll while something is shared; otherwise one fetch per visit is enough.
+    const timer = setInterval(() => {
+      if (sharedListRef.current.length) tick();
+    }, 10_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [user?.uid]);
+
+  async function pushSharedChatNow(chat) {
+    const sync = sharedSyncRef.current;
+    const known = sync.get(chat.id);
+    sync.set(chat.id, { ...(known || {}), pushing: true });
+    try {
+      const saved = await pushSharedChat(chat.sharedProjectId, chat, known?.updatedAt ?? null);
+      sync.set(chat.id, { updatedAt: saved.updatedAt, fp: chatFingerprint(saved.messages), at: Date.now() });
+      const missingAuthor = saved.messages.some((m, i) => m.author && !chat.messages[i]?.author);
+      if (missingAuthor) applySharedMessages(chat.id, saved.messages);
+    } catch (error) {
+      if (error.code === "conflict") {
+        // Someone else saved first: keep their messages and append ours after them.
+        const remote = await fetchSharedChat(chat.sharedProjectId, chat.id).catch(() => null);
+        if (!remote) {
+          sync.set(chat.id, { ...(known || {}), fp: chatFingerprint(chat.messages) });
+          return;
+        }
+        const extra = chat.messages.slice(commonPrefix(remote.messages, chat.messages));
+        sync.set(chat.id, { updatedAt: remote.updatedAt, fp: chatFingerprint(remote.messages), at: Date.now() });
+        applySharedMessages(chat.id, [...remote.messages, ...extra]);
+        return;
+      }
+      // Don't retry until the chat changes again.
+      sync.set(chat.id, { ...(known || {}), fp: chatFingerprint(chat.messages) });
+    }
+  }
+
+  function applySharedMessages(chatId, nextMessages) {
+    setChats((current) => {
+      const next = current.map((chat) => (chat.id === chatId ? { ...chat, messages: nextMessages } : chat));
+      saveChats(user.uid, next);
+      return next;
+    });
+    if (activeChatIdRef.current === chatId && !busyRef.current) setMessages(nextMessages);
+  }
+
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    const timer = setTimeout(async () => {
+      if (!sharedReadyRef.current) return;
+      for (const chat of chatsRef.current) {
+        if (!chat.sharedProjectId || !chat.messages?.length) continue;
+        if (chat.id === activeChatIdRef.current && busyRef.current) continue;
+        const known = sharedSyncRef.current.get(chat.id);
+        if (known?.pushing || known?.fp === chatFingerprint(chat.messages)) continue;
+        await pushSharedChatNow(chat);
+      }
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [chats, busy, user?.uid]);
+
+  async function leaveProject(entry) {
+    if (!entry?.shareId) return;
+    if (!window.confirm(`Leave “${entry.name}”? You'll lose access to its chats.`)) return;
+    try {
+      await leaveSharedProject(entry.shareId);
+    } catch (err) {
+      setProjectsNotice({ tone: "error", text: err.message || "Could not leave this project." });
+      return;
+    }
+    setProjectsNotice({ tone: "success", text: `You left “${entry.name}”.` });
+    await refreshSharedRef.current?.();
+    credits.refresh();
+  }
+  const isBusinessOwner = Boolean(credits.data) && !credits.data.teamOwner && (PLANS[credits.data.plan]?.seats || 1) > 1;
+
+  const projectNamesKey = ownProjects.map((entry) => `${entry.name}\u0001${projectDisplayWebsite(entry)}`).join("\u0000");
   useEffect(() => {
     if (!user?.uid || !projectNamesKey) return;
     const entries = projectNamesKey.split("\u0000").map((pair) => {
@@ -922,12 +1193,13 @@ export function Workspace() {
         setMessages([...messagesRef.current, { role: "assistant", content: `This task couldn't finish: ${err.message}` }]);
       })
       .finally(() => {
-        if (controller.signal.aborted) return;
-        runningJobsRef.current.delete(job.chatId);
-        attachedJobRef.current = null;
-        ackJobs([job.id]);
+        if (attachedJobRef.current?.controller === controller) attachedJobRef.current = null;
         clearAllProgress();
         setBusy(false);
+        if (controller.signal.aborted) return;
+        releaseAgent(job.agentId || null);
+        runningJobsRef.current.delete(job.chatId);
+        ackJobs([job.id]);
       });
     return undefined;
   }, [activeChatId, runningJobsVersion, user?.uid]);
@@ -941,7 +1213,13 @@ export function Workspace() {
     clearAllProgress();
     setBusy(false);
   }, [activeChatId]);
-  useEffect(() => () => attachedJobRef.current?.controller.abort(), []);
+  useEffect(
+    () => () => {
+      attachedJobRef.current?.controller.abort();
+      attachedJobRef.current = null;
+    },
+    [],
+  );
 
   function progressSetterFor(agentId) {
     switch (agentId) {
@@ -959,7 +1237,6 @@ export function Workspace() {
       case "backlink-finder": return setBacklinkFinderProgress;
       case "b2b-lead-finder": return setB2bLeadFinderProgress;
       case "local-seo": return setLocalSeoProgress;
-      case "reels-creation": return setReelsCreationProgress;
       case "site-integrations": return setSiteIntegrationsProgress;
       default: return null;
     }
@@ -979,7 +1256,6 @@ export function Workspace() {
     setBacklinkFinderProgress(null);
     setB2bLeadFinderProgress(null);
     setLocalSeoProgress(null);
-    setReelsCreationProgress(null);
     setAiOrchestratorProgress(null);
     setSiteIntegrationsProgress(null);
   }
@@ -1001,6 +1277,7 @@ export function Workspace() {
     setStatus("");
     setAttachments([]);
     setPendingAgent(null);
+    setLastAgentId(null);
     setAuditProgress(null);
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -1008,7 +1285,7 @@ export function Workspace() {
   async function renameProject(oldName, rawName, rawWebsite) {
     const name = String(rawName || "").trim() || oldName;
     const current = projects.find((entry) => entry.name === oldName);
-    if (!current) return;
+    if (!current || current.shared) return;
     if (name.length > 60) throw new Error("Keep the project name under 60 characters.");
     if (projects.some((entry) => entry.name !== oldName && entry.name.toLowerCase() === name.toLowerCase())) {
       throw new Error("That project name already exists.");
@@ -1051,6 +1328,12 @@ export function Workspace() {
       return updated;
     });
 
+    if (current.shareId) {
+      updateSharedProject(current.shareId, { name, website, knowledge, logo: result.websiteChanged ? "" : current.logo || "" })
+        .then(() => refreshSharedRef.current?.())
+        .catch(() => {});
+    }
+
     if (project === oldName) {
       setProject(name);
       if (user) saveProject(user.uid, name).catch(() => {});
@@ -1072,7 +1355,7 @@ export function Workspace() {
 
   function openAddProject() {
     const plan = PLANS[credits.data?.plan] || PLANS.free;
-    if (credits.data && projects.length >= plan.projects) {
+    if (credits.data && ownProjects.length >= plan.projects) {
       setProjectOpen(false);
       setNavOpen(false);
       setBillingNotice("project-limit");
@@ -1111,7 +1394,9 @@ export function Workspace() {
   }
 
   async function deleteProject(name) {
-    if (projects.length <= 1) {
+    const target = projects.find((entry) => entry.name === name);
+    if (!target || target.shared) return;
+    if (ownProjects.length <= 1) {
       setStatus("Keep at least one project.");
       return;
     }
@@ -1139,6 +1424,7 @@ export function Workspace() {
         return;
       }
     }
+    if (target.shareId) await stopSharingProject(target.shareId).catch(() => {});
     const next = projects.filter((entry) => entry.name !== name);
     setProjects(next);
     if (user?.uid) saveProjects(user.uid, next);
@@ -1169,20 +1455,11 @@ export function Workspace() {
     const incoming = [...(fileList || [])];
     if (!incoming.length) return;
     const errors = [];
-    const reelsActive =
-      pendingAgent === "reels-creation" ||
-      chats.find((item) => item.id === activeChatIdRef.current)?.agent === "reels-creation" ||
-      activeAgent?.id === "reels-creation";
-
     const accepted = [];
     for (const file of incoming) {
       const error = validateAttachmentFile(file);
       if (error) {
         errors.push(error);
-        continue;
-      }
-      if (reelsActive && isVideoAttachmentFile(file)) {
-        errors.push(`"${file.name}": reels use a photo reference, not a video. Attach an image instead.`);
         continue;
       }
       accepted.push(file);
@@ -1234,7 +1511,8 @@ export function Workspace() {
     const inferred = inferComposerFromMode(chat.mode || mode);
     setEffortAuto(inferred.effortAuto);
     setEffortTier(inferred.effortTier);
-    setPendingAgent(chat.agent || null);
+    setPendingAgent(chat.messages?.length ? null : chat.agent || null);
+    setLastAgentId(chat.agent || null);
     setAuditProgress(null);
     setPrompt("");
     setStatus("");
@@ -1243,6 +1521,13 @@ export function Workspace() {
   }
 
   function deleteChat(id) {
+    const target = chats.find((item) => item.id === id);
+    if (target?.sharedProjectId) {
+      deleteSharedChat(target.sharedProjectId, id)
+        .then(() => sharedSyncRef.current.delete(id))
+        // If the server refuses, the next sync brings the chat back.
+        .catch((err) => setStatus(err.message || "Could not delete this chat."));
+    }
     setChats((current) => {
       const next = current.filter((item) => item.id !== id);
       if (user?.uid) saveChats(user.uid, next);
@@ -1273,6 +1558,9 @@ export function Workspace() {
         workspaceMode === WORKSPACE_MODES.ai ? WORKSPACE_MODES.ai : WORKSPACE_MODES.manual,
       messages: [],
       updatedAt: Date.now(),
+      ...(activeProjectRecord?.shareId
+        ? { sharedProjectId: activeProjectRecord.shareId, sharedRole: activeProjectRecord.shared ? "member" : "owner" }
+        : {}),
     };
     setActiveChatId(id);
     setChats((current) => {
@@ -1355,7 +1643,213 @@ export function Workspace() {
     }
   }
 
+  function latestArticlePayload() {
+    const latest = extractLastBlogArticleFromHistory(messagesRef.current);
+    return latest?.html
+      ? { title: latest.blogTitle || latest.metaTitle, html: latest.html, metaDescription: latest.metaDescription, slug: latest.urlSlug }
+      : null;
+  }
+
+  async function resolvePublishTime(text) {
+    const token = text.trim().toLowerCase();
+    const at = (days, hour) => {
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      d.setHours(hour, 0, 0, 0);
+      return d.toISOString();
+    };
+    if (token === "in1h") return new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    if (token === "tomorrow9") return at(1, 9);
+    if (token === "monday9") return at(((8 - new Date().getDay()) % 7) || 7, 9);
+    const route = await routeAiObjective({
+      messages: [{ role: "user", content: `Schedule publishing my latest blog to my website at this time: ${text}` }],
+      project,
+    }).catch(() => null);
+    if (route?.action === "schedule" && route.runAt) return route.runAt;
+    const parsed = Date.parse(text);
+    return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
+  }
+
+  async function runFollowUp(kind, label, timeText = "") {
+    if (busy) return;
+    const history = [...messagesRef.current, { role: "user", content: label }];
+    setMessages(history);
+    setBusy(true);
+    setStatus("");
+    const projectCtx = activeProjectContext();
+    const reply = (content) => setMessages([...history, { role: "assistant", content }]);
+    try {
+      if (kind === "schedule-ask") {
+        awaitingPublishTimeRef.current = activeChatIdRef.current;
+        reply(
+          [
+            "When should I publish it? Pick an option or type a date and time (for example, *Friday 10am*).",
+            "",
+            `SECONDARY_ACTION|In 1 hour|${FOLLOW_UP.scheduleAt}in1h`,
+            `SECONDARY_ACTION|Tomorrow 9 AM|${FOLLOW_UP.scheduleAt}tomorrow9`,
+            `SECONDARY_ACTION|Monday 9 AM|${FOLLOW_UP.scheduleAt}monday9`,
+          ].join("\n"),
+        );
+        return;
+      }
+
+      if (kind === "schedule") {
+        const article = latestArticlePayload();
+        if (!article) {
+          awaitingPublishTimeRef.current = null;
+          reply("I couldn't find a blog in this chat to schedule.");
+          return;
+        }
+        const runAt = await resolvePublishTime(timeText);
+        if (!runAt) {
+          reply("I couldn't read that time. Try something like *tomorrow 9am* or *Nov 20, 3pm*.");
+          return;
+        }
+        awaitingPublishTimeRef.current = null;
+        try {
+          const job = await createSchedule({
+            uid: user?.uid,
+            project,
+            website: projectCtx.website,
+            knowledge: projectCtx.knowledge,
+            brandName: projectCtx.brandName,
+            title: `Publish "${article.title || "blog"}"`,
+            runAt,
+            steps: [{ agentId: "site-integrations", agentMessage: "Publish the latest Blazly article live on my website." }],
+            article,
+          });
+          setScheduleRefresh((n) => n + 1);
+          reply(formatScheduleConfirmation(job, `Scheduled **${article.title || "your blog"}** to publish.`));
+        } catch (err) {
+          reply(
+            err.code === "integration_required"
+              ? `${err.message}\n\nLINK_ACTION|Connect integrations|/integrations`
+              : err.message || "Could not schedule that.",
+          );
+        }
+        return;
+      }
+
+      setSiteIntegrationsProgress({ phase: "integrations", message: "Connecting to your site" });
+      const audit = [...messagesRef.current].reverse().find((m) => m.role === "assistant");
+      const message =
+        kind === "publish"
+          ? "Publish the latest Blazly article live on my website now."
+          : [
+              "Fix the issues from this site audit on my website using the connected integrations.",
+              "Update posts and pages you can reach (titles, meta descriptions, headings, content, internal links, image alt text); resubmit the sitemap if Search Console is connected.",
+              "Then report what you fixed with links, and list anything that needs a manual change.",
+              "",
+              "Site audit:",
+              stripUiBlocks(String(audit?.content || "")).slice(0, 20_000),
+            ].join("\n");
+      const content = await runSiteIntegrationsStream({
+        uid: user?.uid,
+        project,
+        website: projectCtx.website,
+        message,
+        messages: messagesRef.current,
+        article: latestArticlePayload(),
+        onProgress: (event) => setSiteIntegrationsProgress(event),
+      });
+      reply(content);
+    } catch (err) {
+      if (isUpgradeError(err)) reply(upgradeReply(err));
+      else {
+        setMessages(history.slice(0, -1));
+        setStatus(err.message || "Blazly could not reply.");
+      }
+    } finally {
+      setSiteIntegrationsProgress(null);
+      setBusy(false);
+    }
+  }
+
+  async function runPlannedAgents(route, history, projectCtx) {
+    const plan = Array.isArray(route.plan) && route.plan.length ? route.plan : [{ agentId: route.agentId, task: "" }];
+    const intro =
+      plan.length > 1
+        ? `${route.intro || "Here's the plan."}\n\n**Plan — ${plan.length} agents**\n${formatPlanSteps(plan, 0)}\n\nStarting with **${agentTitle(route.agentId)}**.`
+        : route.intro;
+    const creditsStart = credits.data?.used ?? null;
+    let thread = [...history];
+    let ranAgents = [];
+    let current = null;
+    const append = (content) => {
+      thread = [...thread, { role: "assistant", content }];
+      setMessages(thread);
+    };
+    const clearCurrent = () => {
+      if (current) progressSetterFor(current)?.(null);
+    };
+    setJobContext(null);
+    await runAiChain({
+      route: { ...route, intro },
+      messages: history,
+      project,
+      website: projectCtx.website,
+      knowledge: projectCtx.knowledge,
+      brandName: projectCtx.brandName,
+      onEvent: (event) => {
+        if (event.type === "step_start") {
+          setAiOrchestratorProgress(null);
+          current = event.agentId;
+          (progressSetterFor(current) || setAiOrchestratorProgress)({ phase: "orchestrator", stage: "route", message: `Running ${agentTitle(current)}` });
+        } else if (event.type === "progress") {
+          (progressSetterFor(event.agentId) || setAiOrchestratorProgress)(event.event);
+        } else if (event.type === "step_done") {
+          clearCurrent();
+          ranAgents = [...ranAgents, event.agentId];
+          append(String(event.content || "").replace(/^active\|/gm, "done|"));
+        } else if (event.type === "thinking") {
+          setAiOrchestratorProgress({ phase: "orchestrator", stage: "route", message: event.message });
+        } else if (event.type === "error") {
+          clearCurrent();
+          setAiOrchestratorProgress(null);
+          append(`I couldn't finish this step: ${event.error}${ranAgents.length ? "\n\nThe results above are complete — reply to retry or continue." : ""}`);
+        } else if (event.type === "complete") {
+          setAiOrchestratorProgress(null);
+          ranAgents = event.ranAgents || ranAgents;
+          const lines = [event.message || "All done."];
+          if (ranAgents.length > 1) {
+            lines.push("", "CARD_START|Completed run", `Agents|${ranAgents.map(agentTitle).join(" → ")}`, "CARD_END");
+          }
+          append(lines.join("\n"));
+        }
+      },
+    });
+    clearCurrent();
+    if (ranAgents.length > 1 && creditsStart != null) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const after = await fetchCredits().catch(() => null);
+      window.dispatchEvent(new Event("blazly:credits-changed"));
+      if (after?.used != null) {
+        const used = Math.max(0, after.used - creditsStart).toLocaleString();
+        const last = thread.at(-1);
+        if (last?.content?.includes("CARD_START|Completed run")) {
+          thread = [...thread.slice(0, -1), { ...last, content: last.content.replace("CARD_END", `Credits used|${used}\nCARD_END`) }];
+          setMessages(thread);
+        }
+      }
+    }
+  }
+
   async function send(overrideText) {
+    if (overrideText === FOLLOW_UP.publish) return runFollowUp("publish", "Publish");
+    if (overrideText === FOLLOW_UP.schedule) return runFollowUp("schedule-ask", "Schedule");
+    if (overrideText === FOLLOW_UP.fixAudit) return runFollowUp("fix", "Fix these issues");
+    if (typeof overrideText === "string" && overrideText.startsWith(FOLLOW_UP.scheduleAt)) {
+      const token = overrideText.slice(FOLLOW_UP.scheduleAt.length);
+      const labels = { in1h: "In 1 hour", tomorrow9: "Tomorrow 9 AM", monday9: "Monday 9 AM" };
+      return runFollowUp("schedule", labels[token] || token, token);
+    }
+    if (typeof overrideText !== "string" && awaitingPublishTimeRef.current && awaitingPublishTimeRef.current === activeChatIdRef.current) {
+      const typed = readPrompt();
+      if (typed && !attachments.length) {
+        setPrompt("");
+        return runFollowUp("schedule", typed, typed);
+      }
+    }
     if (overrideText === "/integrations") {
       openView("integrations");
       return;
@@ -1371,7 +1865,11 @@ export function Workspace() {
     let text = readPrompt(overrideText);
     const fromAction = typeof overrideText === "string";
     const pendingFiles = fromAction ? [] : attachments;
-    if ((!text && !pendingFiles.length) || busy) return;
+    if (!text && !pendingFiles.length) return;
+    if (busy) {
+      setStatus("Blazly is still working on the last task. Wait for it to finish, then send again.");
+      return;
+    }
     const draft = text;
     setBusy(true);
     setStatus("");
@@ -1401,6 +1899,7 @@ export function Workspace() {
         role: "user",
         content: userMessage.content,
         attachments: userMessage.attachments,
+        ...(activeProjectRecord?.shareId && user?.uid ? { author: { uid: user.uid, name: displayName } } : {}),
       },
     ];
     setMessages(history);
@@ -1471,12 +1970,9 @@ export function Workspace() {
           return;
         }
         if (route.action === "run_agent") {
-          aiDispatchAgentId = route.agentId;
-          aiIntroPending = formatOrchestratorDispatchIntro(route.intro, route.agentId);
-          userMessage = { ...userMessage, content: route.agentMessage };
-          setPendingAgent(route.agentId);
-          setEffortAuto(false);
-          setEffortTier("max");
+          await runPlannedAgents(route, history, projectCtx);
+          setBusy(false);
+          return;
         }
       } catch (err) {
         setBusy(false);
@@ -1496,7 +1992,7 @@ export function Workspace() {
     const dispatchAgent = aiDispatchAgentId || pendingAgent;
     setJobContext({ chatId: activeChatIdRef.current, agentId: dispatchAgent, project });
     const agentEngaged = (id) =>
-      dispatchAgent === id || pendingAgent === id || chatAgentRecord === id;
+      dispatchAgent === id || pendingAgent === id;
     const mergeAiIntro = (reply) => (aiIntroPending ? `${aiIntroPending}\n\n${reply}` : reply);
 
     const siteAuditActive =
@@ -1530,6 +2026,18 @@ export function Workspace() {
 
     const rankingFinderActive =
       agentEngaged("ranking-opportunity-finder");
+    if (rankingFinderActive && aiDispatchAgentId === "ranking-opportunity-finder") {
+      const fields = parseRankingOpportunityBrief(userMessage.content);
+      const ctx = activeProjectContext();
+      const k = ctx.knowledge || {};
+      const listFirst = (v) => (Array.isArray(v) ? v[0]?.name || v[0] : v);
+      const website = fields.website || ctx.website || firstUrlInText(userMessage.content) || "";
+      const targetKeyword =
+        fields.targetKeyword || String(listFirst(k.services) || listFirst(k.products) || k.industry || ctx.brandName || "").trim();
+      if (website && targetKeyword) {
+        userMessage = { ...userMessage, content: `Website URL: ${website}\nTarget keyword: ${targetKeyword}` };
+      }
+    }
     const rankingInChat = messagesRef.current.length > 0;
     const runRankingFinder =
       rankingFinderActive &&
@@ -1583,38 +2091,6 @@ export function Workspace() {
       if (keywordStatus) {
         if (!fromAction) setPrompt(draft);
         setStatus(keywordStatus);
-        setBusy(false);
-        setMessages(history.slice(0, -1));
-        return;
-      }
-    }
-
-    const reelsCreationActive =
-      agentEngaged("reels-creation") ||
-      Boolean(extractReelStateFromMessages(messagesRef.current));
-    const reelsCreationInChat = messagesRef.current.length > 0;
-
-    const runReelsCreation =
-      reelsCreationActive &&
-      shouldRunReelsCreation(userMessage.content, {
-        agentActive: true,
-        inChat: reelsCreationInChat,
-      });
-
-    if (reelsCreationActive && !runReelsCreation) {
-      let reelsStatus = "";
-      const parsedReel = parseReelsCreationBrief(userMessage.content);
-      if (isEmptyReelsCreationBrief(userMessage.content) || looksLikeReelsCreationBrief(userMessage.content)) {
-        if (!parsedReel.prompt || parsedReel.prompt.length < 12) {
-          reelsStatus =
-            "Describe your reel after Reel prompt: (scene, style, action). Remember: each clip is max 10 seconds.";
-        }
-      } else if (!parsedReel.prompt || parsedReel.prompt.length < 12) {
-        reelsStatus = "Add a detailed reel prompt (at least 12 characters), then send.";
-      }
-      if (reelsStatus) {
-        if (!fromAction) setPrompt(draft);
-        setStatus(reelsStatus);
         setBusy(false);
         setMessages(history.slice(0, -1));
         return;
@@ -1873,8 +2349,19 @@ export function Workspace() {
     const priorHumanizeArticle = humanizeActive
       ? extractLastBlogArticleFromHistory(messagesRef.current)
       : null;
+    const siteIntegrationsActive = agentEngaged("site-integrations");
     const runSiteIntegrations =
-      agentEngaged("site-integrations") && userMessage.content.trim().length >= 3;
+      siteIntegrationsActive &&
+      !isEmptySiteIntegrationsBrief(userMessage.content) &&
+      userMessage.content.trim().length >= 3;
+
+    if (siteIntegrationsActive && isEmptySiteIntegrationsBrief(userMessage.content)) {
+      if (!fromAction) setPrompt(draft);
+      setStatus("Say what you want to know from Search Console, GA4, or WordPress, then send.");
+      setBusy(false);
+      setMessages(history.slice(0, -1));
+      return;
+    }
 
     const runHumanize =
       !runSiteIntegrations &&
@@ -1896,8 +2383,8 @@ export function Workspace() {
         const reply = await runSiteAuditStream(siteAuditUrl, {
           onProgress: (event) => setAuditProgress(event),
         });
-        setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("site-audit");
+        setMessages([...history, { role: "assistant", content: withFollowUp(mergeAiIntro(reply), await integrationFollowUp("audit", user?.uid, project)) }]);
+        releaseAgent("site-audit");
         setAuditProgress(null);
         return;
       }
@@ -1916,8 +2403,8 @@ export function Workspace() {
           writerMode: blogWriterMode,
           onProgress: (event) => setBlogProgress(event),
         });
-        setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent(blogAgentId);
+        setMessages([...history, { role: "assistant", content: withFollowUp(mergeAiIntro(reply), await integrationFollowUp("blog", user?.uid, project)) }]);
+        releaseAgent(blogAgentId);
         setBlogProgress(null);
         return;
       }
@@ -1934,8 +2421,8 @@ export function Workspace() {
           writerMode: blogWriterMode,
           onProgress: (event) => setBlogProgress(event),
         });
-        setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent(blogAgentId);
+        setMessages([...history, { role: "assistant", content: withFollowUp(mergeAiIntro(reply), await integrationFollowUp("blog", user?.uid, project)) }]);
+        releaseAgent(blogAgentId);
         setBlogProgress(null);
         return;
       }
@@ -1953,7 +2440,7 @@ export function Workspace() {
           onProgress: (event) => setRankingProgress(event),
         });
         setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("ranking-opportunity-finder");
+        releaseAgent("ranking-opportunity-finder");
         setRankingProgress(null);
         return;
       }
@@ -1967,23 +2454,8 @@ export function Workspace() {
           onProgress: (event) => setKeywordFinderProgress(event),
         });
         setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("keyword-finder");
+        releaseAgent("keyword-finder");
         setKeywordFinderProgress(null);
-        return;
-      }
-
-      if (runReelsCreation) {
-        setReelsCreationProgress({ phase: "reels_creation", stage: "prompt", message: "Starting" });
-        const reelState = extractReelStateFromMessages(messagesRef.current);
-        const reply = await runReelsCreationStream({
-          message: userMessage.content,
-          attachments: userMessage.attachments,
-          reelState,
-          onProgress: (event) => setReelsCreationProgress(event),
-        });
-        setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("reels-creation");
-        setReelsCreationProgress(null);
         return;
       }
 
@@ -1994,7 +2466,7 @@ export function Workspace() {
           onProgress: (event) => setLocalSeoProgress(event),
         });
         setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("local-seo");
+        releaseAgent("local-seo");
         setLocalSeoProgress(null);
         return;
       }
@@ -2006,7 +2478,7 @@ export function Workspace() {
           onProgress: (event) => setB2bLeadFinderProgress(event),
         });
         setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("b2b-lead-finder");
+        releaseAgent("b2b-lead-finder");
         setB2bLeadFinderProgress(null);
         return;
       }
@@ -2022,7 +2494,7 @@ export function Workspace() {
           onProgress: (event) => setBacklinkFinderProgress(event),
         });
         setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("backlink-finder");
+        releaseAgent("backlink-finder");
         setBacklinkFinderProgress(null);
         return;
       }
@@ -2037,7 +2509,7 @@ export function Workspace() {
           onProgress: (event) => setSerpTrackingProgress(event),
         });
         setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("serp-tracking");
+        releaseAgent("serp-tracking");
         setSerpTrackingProgress(null);
         return;
       }
@@ -2053,7 +2525,7 @@ export function Workspace() {
           onProgress: (event) => setAiVisibilityProgress(event),
         });
         setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("ai-visibility-tracker");
+        releaseAgent("ai-visibility-tracker");
         setAiVisibilityProgress(null);
         return;
       }
@@ -2069,7 +2541,7 @@ export function Workspace() {
           onProgress: (event) => setBrandSentimentProgress(event),
         });
         setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("brand-sentiment-analysis");
+        releaseAgent("brand-sentiment-analysis");
         setBrandSentimentProgress(null);
         return;
       }
@@ -2082,7 +2554,7 @@ export function Workspace() {
           onProgress: (event) => setPromptResearchProgress(event),
         });
         setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("prompt-research");
+        releaseAgent("prompt-research");
         setPromptResearchProgress(null);
         return;
       }
@@ -2104,7 +2576,7 @@ export function Workspace() {
           onProgress: (event) => setCompetitorResearchProgress(event),
         });
         setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("competitor-research");
+        releaseAgent("competitor-research");
         setCompetitorResearchProgress(null);
         return;
       }
@@ -2130,7 +2602,7 @@ export function Workspace() {
           onProgress: (event) => setSiteIntegrationsProgress(event),
         });
         setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("site-integrations");
+        releaseAgent("site-integrations");
         setSiteIntegrationsProgress(null);
         return;
       }
@@ -2149,7 +2621,7 @@ export function Workspace() {
           onProgress: (event) => setHumanizeProgress(event),
         });
         setMessages([...history, { role: "assistant", content: mergeAiIntro(reply) }]);
-        setPendingAgent("humanization");
+        releaseAgent("humanization");
         setHumanizeProgress(null);
         return;
       }
@@ -2183,7 +2655,6 @@ export function Workspace() {
       setBacklinkFinderProgress(null);
       setB2bLeadFinderProgress(null);
       setLocalSeoProgress(null);
-      setReelsCreationProgress(null);
       setAiOrchestratorProgress(null);
       setSiteIntegrationsProgress(null);
       setBusy(false);
@@ -2201,7 +2672,8 @@ export function Workspace() {
         isEmptyGeoBlogBrief(prompt) ||
         isEmptyRankingBrief(prompt) ||
         isEmptyKeywordFinderBrief(prompt) ||
-        isEmptyAiVisibilityBrief(prompt))
+        isEmptyAiVisibilityBrief(prompt) ||
+        isEmptySiteIntegrationsBrief(prompt))
     ) {
       setPrompt("");
     }
@@ -2223,9 +2695,8 @@ export function Workspace() {
     setStatus("");
     setView("home");
     setNavOpen(false);
-    if (agent.id === "site-audit") {
-      const websiteHint = activeProjectContext().website;
-      if (websiteHint && !prompt.trim()) setPrompt(websiteHint);
+    if (agent.id === "site-audit" && messages.length === 0) {
+      setPrompt("Website URL:");
     }
     if (agent.id === "seo-blog-writer" && !prompt.trim() && messages.length === 0) {
       setPrompt(SEO_BLOG_WRITER_BRIEF);
@@ -2234,28 +2705,20 @@ export function Workspace() {
       setPrompt(GEO_BLOG_WRITER_BRIEF);
     }
     if (agent.id === "ranking-opportunity-finder" && messages.length === 0) {
-      setPrompt(rankingBriefPrefill(activeProjectContext().website));
+      setPrompt(rankingBriefPrefill());
     }
     if (agent.id === "keyword-finder" && messages.length === 0) {
       setPrompt(keywordFinderPrefill());
     }
     if (agent.id === "ai-visibility-tracker" && messages.length === 0) {
-      setPrompt(aiVisibilityBriefPrefill(activeProjectContext().website));
+      setPrompt(aiVisibilityBriefPrefill());
     }
     if (agent.id === "brand-sentiment-analysis" && messages.length === 0) {
-      setPrompt(brandSentimentBriefPrefill(activeProjectContext().website));
-    }
-    if (agent.id === "reels-creation" && messages.length === 0) {
-      setPrompt(reelsCreationBriefPrefill());
+      setPrompt(brandSentimentBriefPrefill());
     }
     if (agent.id === "local-seo" && messages.length === 0) {
       const ctx = activeProjectContext();
-      setPrompt(
-        localSeoBriefPrefill(
-          ctx.knowledge?.companyName || "",
-          ctx.website?.includes("google.com/maps") ? ctx.website : "",
-        ),
-      );
+      setPrompt(localSeoBriefPrefill(ctx.knowledge?.companyName || ""));
     }
     if (agent.id === "b2b-lead-finder" && messages.length === 0) {
       setPrompt(b2bLeadFinderBriefPrefill());
@@ -2264,13 +2727,16 @@ export function Workspace() {
       setPrompt(backlinkFinderBriefPrefill());
     }
     if (agent.id === "serp-tracking" && messages.length === 0) {
-      setPrompt(serpTrackingBriefPrefill(activeProjectContext().website));
+      setPrompt(serpTrackingBriefPrefill());
     }
     if (agent.id === "prompt-research" && messages.length === 0) {
       setPrompt(PROMPT_RESEARCH_BRIEF);
     }
     if (agent.id === "competitor-research" && messages.length === 0) {
       setPrompt(competitorResearchBriefPrefill());
+    }
+    if (agent.id === "site-integrations" && messages.length === 0) {
+      setPrompt(SITE_INTEGRATIONS_BRIEF);
     }
     if (agent.id === "humanization" && messages.length === 0) {
       setPrompt("");
@@ -2355,10 +2821,6 @@ export function Workspace() {
           ? inChat
             ? "Enter another keyword or refine with Keyword: …"
             : "Enter a keyword after Keyword:, then send to analyze volume and difficulty…"
-          : activeAgent?.id === "reels-creation"
-            ? inChat
-              ? "Reel prompt: describe another 10-second clip…"
-              : "Reel prompt — each clip is max 10 seconds (1080p). Attach a person photo if needed, then send…"
           : activeAgent?.id === "local-seo"
             ? inChat
               ? "Send an updated business name and Maps URL to refresh the audit…"
@@ -2391,6 +2853,10 @@ export function Workspace() {
                 ? inChat
                   ? "Add or change competitor website URLs, then send to compare again…"
                   : "Competitor website URL — paste one or more competitor sites (one per line), then send…"
+                : activeAgent?.id === "site-integrations"
+                  ? inChat
+                    ? "Ask another question about Search Console, GA4, or WordPress…"
+                    : "What you want to know from Search Console, GA4, or WordPress, then send…"
         : activeAgent?.id === "geo-blog-writer"
         ? inChat
           ? "Ask for GEO-focused edits, more citations, or FAQ changes…"
@@ -2420,6 +2886,10 @@ export function Workspace() {
   const composerProps = {
     activeAgent: isAiWorkspaceMode ? null : activeAgent,
     onClearAgent: clearSelectedAgent,
+    reuseAgent: !isAiWorkspaceMode && inChat && !activeAgent ? AGENTS.find((agent) => agent.id === lastAgentId) || null : null,
+    onReuseAgent: chooseAgent,
+    agents: isAiWorkspaceMode ? null : AGENTS,
+    onPickAgent: chooseAgent,
     prompt,
     promptRef,
     placeholder: promptPlaceholder,
@@ -2464,6 +2934,7 @@ export function Workspace() {
 
   return (
     <div className="product-page">
+      <Ga4WorkspaceTracker view={view} />
       {articleEditorOpen && latestArticle?.body && (
         <ArticleEditor
           title={latestArticle.title}
@@ -2489,7 +2960,7 @@ export function Workspace() {
         <aside className="sidebar" aria-label="Sidebar">
           <div className="sidebar-head">
             <button type="button" className="sidebar-brand" onClick={startNewChat} aria-label="Blazly home">
-              <img className="sidebar-brand-mark" src="/assets/logo.webp" alt="" width={26} height={26} />
+              <img className="sidebar-brand-mark" src="/assets/logo.png" alt="" width={26} height={26} />
               <span className="sidebar-brand-name">Blazly</span>
             </button>
             <button
@@ -2591,12 +3062,12 @@ export function Workspace() {
               <button
                 type="button"
                 className="sidebar-referral"
-                title={sidebarCollapsed ? "Invite friends, get 100 credits" : undefined}
+                title={sidebarCollapsed ? "Invite friends, get 250 credits" : undefined}
                 onClick={() => setReferralOpen(true)}
               >
                 <span className="sidebar-referral-gift" aria-hidden="true">🎁</span>
                 <span className="nav-label">
-                  Invite friends, <strong>get +100 credits</strong>
+                  Invite friends, <strong>get +250 credits</strong>
                 </span>
               </button>
             </div>
@@ -2684,8 +3155,8 @@ export function Workspace() {
                         name={item.name}
                         logo={item.logo}
                         current={item.name === project}
-                        canEdit={isPaidPlan}
-                        canDelete={isPaidPlan && projects.length > 1}
+                        canEdit={isPaidPlan && !item.shared}
+                        canDelete={isPaidPlan && !item.shared && ownProjects.length > 1}
                         onSelect={() => {
                           chooseProject(item.name);
                           setProjectOpen(false);
@@ -2799,6 +3270,7 @@ export function Workspace() {
                   {messages.map((message, index) => {
                     const lastUser = [...messages.slice(0, index)].reverse().find((item) => item.role === "user");
                     return (
+                      <Fragment key={`${message.role}-${index}`}>
                       <ChatMessage
                         key={`${message.role}-${index}`}
                         message={message}
@@ -2810,9 +3282,14 @@ export function Workspace() {
                         onEditUserMessage={editUserMessageAndResend}
                         editUserDisabled={busy}
                         feedbackUid={user?.uid}
+                        showAuthor={Boolean(activeChat?.sharedProjectId)}
                         chatId={activeChatId}
                         animateSteps={message.role === "assistant" && index === messages.length - 1 && !busy}
                       />
+                      {auditDock?.messageIndex === index ? (
+                        <ChatAuditDock dock={auditDock} chatId={activeChatId} onRerun={send} rerunDisabled={busy} inThread />
+                      ) : null}
+                      </Fragment>
                     );
                   })}
                   {busy && !messages[messages.length - 1]?.streaming && (
@@ -2835,22 +3312,12 @@ export function Workspace() {
                             backlinkFinderProgress,
                             b2bLeadFinderProgress,
                             localSeoProgress,
-                            reelsCreationProgress,
                             aiOrchestratorProgress || siteIntegrationsProgress,
                           )}
                         />
                       </div>
                     </div>
                   )}
-                  {auditDock ? (
-                    <ChatAuditDock
-                      dock={auditDock}
-                      chatId={activeChatId}
-                      onRerun={send}
-                      rerunDisabled={busy}
-                      inThread
-                    />
-                  ) : null}
                 </div>
                 <div className="chat-dock">
                   <PromptShell isCompact {...composerProps} />
@@ -2863,7 +3330,7 @@ export function Workspace() {
             <div className="stage">
               <div className="stage-inner">
                 <div className="greeting">
-                  <Icon name="bolt" size={34} className="greeting-mark" strokeWidth={1.4} />
+                  <img src="/assets/logo.png" alt="" width={34} height={34} className="greeting-mark" />
                   <h1 className="greeting-title">{greetingFor(firstName)}</h1>
                 </div>
                 <p className="greeting-context">
@@ -2938,7 +3405,7 @@ export function Workspace() {
                   </div>
                   {AGENT_GROUPS.map((group) => (
                     <div key={group.id} className="agents-group">
-                      <p className="eyebrow agents-group-label">{group.label}</p>
+                      <h3 className="agents-group-label">{group.label}</h3>
                       <div className="agents-grid">
                         {group.agents.map((agent) => (
                           <AgentCard
@@ -3006,6 +3473,9 @@ export function Workspace() {
                       </button>
                     }
                   />
+                  {projectsNotice ? (
+                    <p className={`integration-notice is-${projectsNotice.tone}`}>{projectsNotice.text}</p>
+                  ) : null}
                   <div className="cards">
                     {projectCards.map((item) => (
                       <ProjectWorkCard
@@ -3016,8 +3486,12 @@ export function Workspace() {
                         body={item.website || "No website yet"}
                         status={item.status}
                         current={item.name === project}
-                        canEdit={isPaidPlan}
-                        canDelete={isPaidPlan && projects.length > 1}
+                        canEdit={isPaidPlan && !item.sharedBy}
+                        canDelete={isPaidPlan && !item.sharedBy && ownProjects.length > 1}
+                        sharedBy={item.sharedBy}
+                        memberCount={item.memberCount}
+                        onShare={isBusinessOwner && !item.sharedBy ? () => setShareModalProject(item.name) : null}
+                        onLeave={() => leaveProject(projects.find((entry) => entry.name === item.name))}
                         onSelect={() => openProjectDetail(item.name)}
                         onDelete={() => deleteProject(item.name)}
                         onRename={(next, website) => renameProject(item.name, next, website)}
@@ -3059,6 +3533,10 @@ export function Workspace() {
                 <ProfileView
                   notice={accountNotice}
                   onUpgrade={() => openView("pricing")}
+                  onOpenProjects={() => {
+                    setOpenedProject(null);
+                    openView("projects");
+                  }}
                   displayName={displayName}
                   email={user?.email}
                   initial={initial}
@@ -3093,7 +3571,13 @@ export function Workspace() {
                 />
               )}
               {view === "integrations" && (
-                <IntegrationsView uid={user?.uid} project={project} website={projectDisplayWebsite(projects.find((entry) => entry.name === project))} notice={integrationsNotice} />
+                <IntegrationsView
+                  uid={activeProjectRecord?.shared ? null : user?.uid}
+                  project={project}
+                  website={projectDisplayWebsite(activeProjectRecord)}
+                  notice={integrationsNotice}
+                  managedBy={activeProjectRecord?.shared?.ownerName || ""}
+                />
               )}
               {view === "settings" && (
                 <SettingsView
@@ -3109,6 +3593,24 @@ export function Workspace() {
         </main>
       </div>
       <ReferralModal open={referralOpen} onClose={() => setReferralOpen(false)} />
+      <OutOfCreditsModal
+        open={outOfCreditsOpen}
+        onClose={() => setOutOfCreditsOpen(false)}
+        credits={credits}
+        email={user?.email}
+        onSeePlans={() => {
+          setOutOfCreditsOpen(false);
+          setView("pricing");
+        }}
+      />
+      {shareModalProject && projects.some((entry) => entry.name === shareModalProject) ? (
+        <ProjectShareModal
+          project={projects.find((entry) => entry.name === shareModalProject)}
+          share={sharedProjects.find((item) => item.id === projects.find((entry) => entry.name === shareModalProject)?.shareId) || null}
+          onClose={() => setShareModalProject(null)}
+          onChanged={() => refreshSharedRef.current?.()}
+        />
+      ) : null}
       <SignOutConfirmModal
         open={signOutConfirmOpen}
         onClose={() => setSignOutConfirmOpen(false)}
@@ -3219,10 +3721,11 @@ function ProjectChatsView({
 }
 
 function AgentCard({ agent, active, disabled = false, onSelect }) {
-  return (
+  const card = (
     <button
       type="button"
       className={`agent-card${active ? " is-active" : ""}${disabled ? " is-disabled" : ""}`}
+      style={{ "--agent-c": agentColor(agent.id) }}
       aria-pressed={active}
       disabled={disabled}
       aria-disabled={disabled || undefined}
@@ -3233,16 +3736,58 @@ function AgentCard({ agent, active, disabled = false, onSelect }) {
         <Icon name={agent.icon} size={18} />
       </span>
       <span className="agent-card-copy">
-        <span className="agent-card-title">
-          {agent.title}
-          {active ? <span className="agent-card-state">In composer</span> : null}
-        </span>
+        <span className="agent-card-title">{agent.title}</span>
         <span className="agent-card-body">{agent.body}</span>
         {agent.chipHint ? <span className="agent-card-meta">{agent.chipHint}</span> : null}
       </span>
       <Icon name="arrowRight" size={16} className="agent-card-arrow" />
     </button>
   );
+  if (!disabled) return card;
+  return (
+    <span className="agent-card-lock" data-tooltip="Switch to Manual mode to use this agent directly">
+      {card}
+    </span>
+  );
+}
+
+/** Own projects (tagged with their share id) followed by projects teammates shared with you. */
+function mergeSharedProjects(current, shares) {
+  const own = current.filter((entry) => !entry.shared);
+  const ownerShare = new Map(shares.filter((s) => s.role === "owner").map((s) => [s.name, s.id]));
+  const ownNext = own.map((entry) => {
+    const shareId = ownerShare.get(entry.name);
+    if ((entry.shareId || "") === (shareId || "")) return entry;
+    const { shareId: _old, ...rest } = entry;
+    return shareId ? { ...rest, shareId } : rest;
+  });
+  const previous = new Map(current.filter((entry) => entry.shared).map((entry) => [entry.shareId, entry]));
+  const taken = new Set(ownNext.map((entry) => entry.name.toLowerCase()));
+  const joined = shares
+    .filter((s) => s.role === "member")
+    .map((s) => {
+      const ownerFirst = (s.ownerName || "teammate").split(" ")[0];
+      const name = taken.has(s.name.toLowerCase()) ? `${s.name} (${ownerFirst})` : s.name;
+      taken.add(name.toLowerCase());
+      return {
+        id: `shared_${s.id}`,
+        name,
+        website: s.website || "",
+        knowledge: s.knowledge || null,
+        logo: s.logo || previous.get(s.id)?.logo || "",
+        shareId: s.id,
+        shared: { role: "member", ownerName: s.ownerName || "Your teammate" },
+      };
+    });
+  const next = [...ownNext, ...joined];
+  return JSON.stringify(next) === JSON.stringify(current) ? current : next;
+}
+
+/** Number of leading messages two chats agree on. */
+function commonPrefix(a, b) {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i].role === b[i].role && a[i].content === b[i].content) i += 1;
+  return i;
 }
 
 function ProjectMenuRow({ name, logo, current, canEdit, canDelete, onSelect, onDelete, onRename }) {
@@ -3285,7 +3830,24 @@ function ProjectMenuRow({ name, logo, current, canEdit, canDelete, onSelect, onD
   );
 }
 
-function ProjectWorkCard({ title, logo, website, body, status, current, canEdit, canDelete, onSelect, onDelete, onRename, onUpgrade }) {
+function ProjectWorkCard({
+  title,
+  logo,
+  website,
+  body,
+  status,
+  current,
+  canEdit,
+  canDelete,
+  sharedBy,
+  memberCount,
+  onShare,
+  onLeave,
+  onSelect,
+  onDelete,
+  onRename,
+  onUpgrade,
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
   const [siteDraft, setSiteDraft] = useState(website || "");
@@ -3371,8 +3933,25 @@ function ProjectWorkCard({ title, logo, website, body, status, current, canEdit,
           <Icon name="arrowRight" size={16} className="card-arrow" />
         </button>
       )}
-      {!editing ? (
+      {!editing && sharedBy ? (
         <div className="project-card-footer">
+          <span className="project-card-shared">
+            <Icon name="users" size={13} />
+            Shared by {sharedBy}
+          </span>
+          <button type="button" className="project-card-delete" onClick={onLeave}>
+            Leave
+          </button>
+        </div>
+      ) : null}
+      {!editing && !sharedBy ? (
+        <div className="project-card-footer">
+          {onShare ? (
+            <button type="button" className="project-card-action project-card-share" onClick={onShare}>
+              <Icon name="link" size={13} />
+              {memberCount ? `Shared · ${memberCount + 1} people` : "Share"}
+            </button>
+          ) : null}
           {canEdit ? (
             <button type="button" className="project-card-action" onClick={startEditing}>
               Edit

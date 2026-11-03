@@ -3,7 +3,6 @@ export const AGENTS = [
   { id: "site-audit", title: "Site Audit" },
   { id: "seo-blog-writer", title: "SEO & AEO writer" },
   { id: "geo-blog-writer", title: "GEO blog writer" },
-  { id: "reels-creation", title: "Reels creation" },
   { id: "humanization", title: "Humanization" },
   { id: "ranking-opportunity-finder", title: "Ranking Opportunity Finder" },
   { id: "local-seo", title: "Local SEO (Google Maps)" },

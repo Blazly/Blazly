@@ -3,9 +3,6 @@ export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 export const ATTACHMENT_ACCEPT =
   "image/*,.pdf,.txt,.md,.markdown,.csv,.json,.html,.xml,.svg,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip";
 
-export const REELS_ATTACHMENT_ACCEPT =
-  `${ATTACHMENT_ACCEPT},video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm`;
-
 export function isVideoAttachmentFile(file) {
   if (!file) return false;
   return (

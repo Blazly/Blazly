@@ -1,10 +1,12 @@
+import { currentPlan } from "./billing/entitlements.js";
+import { auditPageLimit } from "../src/plans.js";
 import { readJson } from "./readJson.js";
 import { blazlyLayoutPrompt } from "./auditLayoutPrompt.js";
 import { FETCH_HEADERS, loadPage, normalizeWebsite } from "./analyze.js";
 import { executeDataForSeoTool } from "./dataforseo.js";
 import { runExtensiveSiteAudit } from "./site-audit-extensive.js";
 
-const MAX_PAGES = 100;
+const maxPages = () => auditPageLimit(currentPlan());
 const CRAWL_CONCURRENCY = 4;
 const SECONDS_PER_PAGE = 3.5;
 
@@ -116,7 +118,7 @@ async function discoverPageUrls(website, onProgress) {
       message: "Parsing sitemap",
       current: seen.size,
       total: seen.size,
-      etaSeconds: estimateEta(Math.min(seen.size, MAX_PAGES)),
+      etaSeconds: estimateEta(Math.min(seen.size, maxPages())),
     });
     const xml = await fetchText(sitemapUrl);
     if (!xml || !/<urlset|<sitemapindex/i.test(xml)) continue;
@@ -131,7 +133,7 @@ async function discoverPageUrls(website, onProgress) {
           message: "Parsing sitemap",
           current: seen.size,
           total: seen.size,
-          etaSeconds: estimateEta(Math.min(seen.size, MAX_PAGES)),
+          etaSeconds: estimateEta(Math.min(seen.size, maxPages())),
         });
       }
     } else {
@@ -162,8 +164,8 @@ async function discoverPageUrls(website, onProgress) {
     message: `Found ${total} page${total === 1 ? "" : "s"}`,
     current: 0,
     total,
-    totalToAudit: Math.min(total, MAX_PAGES),
-    etaSeconds: estimateEta(Math.min(total, MAX_PAGES)),
+    totalToAudit: Math.min(total, maxPages()),
+    etaSeconds: estimateEta(Math.min(total, maxPages())),
   });
 
   return [...seen];

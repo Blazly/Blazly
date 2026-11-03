@@ -15,7 +15,6 @@ import { attachSerpTracking } from "./server/serpTracking.js";
 import { attachBacklinkFinder } from "./server/backlinkFinder.js";
 import { attachB2bLeadFinder } from "./server/b2bLeadFinder.js";
 import { attachLocalSeo } from "./server/localSeo.js";
-import { attachReelsCreation } from "./server/reelsCreation.js";
 import { attachAiOrchestrator } from "./server/aiOrchestrator.js";
 import { attachIntegrations } from "./server/integrations/routes.js";
 import { attachSiteLogo } from "./server/siteLogo.js";
@@ -28,6 +27,7 @@ import { attachBilling } from "./server/billing/routes.js";
 import { attachReferrals } from "./server/referrals.js";
 import { attachCommunity } from "./server/community.js";
 import { attachAccountRoutes } from "./server/billing/accountRoutes.js";
+import { attachSharedProjects } from "./server/sharedProjects.js";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -56,6 +56,8 @@ export default defineConfig(({ mode }) => {
     "STRIPE_PRICE_PRO_ANNUAL",
     "STRIPE_PRICE_BUSINESS_MONTHLY",
     "STRIPE_PRICE_BUSINESS_ANNUAL",
+    "STRIPE_PRICE_AGENCY_MONTHLY",
+    "STRIPE_PRICE_AGENCY_ANNUAL",
     "STRIPE_PORTAL_CONFIG",
     "BREVO_API_KEY",
     "BREVO_VERIFICATION_TEMPLATE_ID",
@@ -102,6 +104,7 @@ export default defineConfig(({ mode }) => {
           attachReferrals(server);
           attachCommunity(server);
           attachAccountRoutes(server);
+          attachSharedProjects(server);
           attachJobRelay(server);
           attachCredits(server);
           attachAnalyze(server, env.GEMINI_API_KEY);
@@ -147,7 +150,6 @@ export default defineConfig(({ mode }) => {
             ...llmAgentCtx,
           });
           attachLocalSeo(server, { ...searchApiCtx, ...llmAgentCtx });
-          attachReelsCreation(server, { geminiApiKey: env.GEMINI_API_KEY });
           attachAiOrchestrator(server, {
             apiKey: env.ANTHROPIC_API_KEY,
             workspaceId: env.ANTHROPIC_WORKSPACE_ID,
@@ -166,6 +168,7 @@ export default defineConfig(({ mode }) => {
           attachReferrals(server);
           attachCommunity(server);
           attachAccountRoutes(server);
+          attachSharedProjects(server);
           attachJobRelay(server);
           attachCredits(server);
           attachAnalyze(server, env.GEMINI_API_KEY);
@@ -211,7 +214,6 @@ export default defineConfig(({ mode }) => {
             ...llmAgentCtx,
           });
           attachLocalSeo(server, { ...searchApiCtx, ...llmAgentCtx });
-          attachReelsCreation(server, { geminiApiKey: env.GEMINI_API_KEY });
           attachAiOrchestrator(server, {
             apiKey: env.ANTHROPIC_API_KEY,
             workspaceId: env.ANTHROPIC_WORKSPACE_ID,

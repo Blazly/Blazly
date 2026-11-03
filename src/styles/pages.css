@@ -1077,7 +1077,7 @@ button.card:hover .card-arrow,
 .pricing-notice { padding: 10px 14px; border-radius: var(--r-md); font-size: 13.5px; background: var(--wash); color: var(--ink-2); }
 .pricing-notice.is-success { background: var(--good-wash); color: var(--good); }
 .pricing-notice.is-error { background: var(--bad-wash); color: var(--bad); }
-.pricing-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.pricing-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
 .pricing-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 22px; border-radius: var(--r-lg); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line), var(--shadow-xs); }
 .pricing-card.is-popular { box-shadow: inset 0 0 0 1.5px var(--accent), var(--shadow-sm); }
 .pricing-card h2 { margin: 0; font-size: 18px; font-weight: 600; color: var(--ink); }
@@ -1097,6 +1097,10 @@ button.card:hover .card-arrow,
 .pricing-section { display: flex; flex-direction: column; gap: 10px; }
 .pricing-section h2 { margin: 0; font-size: 17px; font-weight: 600; color: var(--ink); }
 .pricing-section-note { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.pricing-topup-section { padding: 20px 22px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent); }
+.pricing-topup-section h2 { display: flex; align-items: center; gap: 8px; }
+.pricing-topup-section .pricing-topup strong { font-size: 15px; }
+.pricing-topup-section .pricing-topup span { color: var(--accent); font-weight: 600; }
 .pricing-topups { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .pricing-topup { display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: var(--r-md); text-align: left; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
 .pricing-topup:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--accent); }
@@ -1109,6 +1113,9 @@ button.card:hover .card-arrow,
 .pricing-table thead th { font-weight: 600; background: var(--wash); }
 .pricing-table tbody th { font-weight: 500; color: var(--ink-2); }
 .pricing-table tr:last-child th, .pricing-table tr:last-child td { border-bottom: 0; }
+@media (max-width: 1240px) {
+  .pricing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 860px) {
   .pricing-grid { grid-template-columns: 1fr; }
   .pricing-topups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1128,22 +1135,59 @@ button.card:hover .card-arrow,
 .referral-error { margin: 0; font-size: 13px; color: var(--bad); }
 
 /* Team */
-.team-card { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
-.team-card .settings-section-head { width: 100%; display: flex; justify-content: space-between; align-items: center; }
-.team-seats { font-size: 12.5px; color: var(--ink-2); }
-.team-note { margin: 0; font-size: 13.5px; color: var(--ink-2); }
-.team-upsell { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
-.team-list { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px var(--line); }
-.team-list li { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 13.5px; color: var(--ink); border-bottom: 1px solid var(--line); }
-.team-list li:last-child { border-bottom: 0; }
-.team-list li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.team-list li em { font-style: normal; font-size: 12px; color: var(--ink-2); }
-.team-list li .btn { height: 28px; padding: 0 10px; font-size: 12.5px; }
-.team-invite { display: flex; gap: 8px; width: 100%; }
-.team-invite input { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border: 0; border-radius: var(--r-sm); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--ink); font-size: 13.5px; }
-.team-notice { margin: 0; font-size: 13px; color: var(--ink-2); word-break: break-word; }
+.team-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 6px; }
+.team-badge { flex: none; padding: 3px 9px; border-radius: var(--r-pill); background: var(--wash); font-size: 12px; font-weight: 500; color: var(--ink-2); }
+.team-card-note { margin: 0; padding: 0 18px 14px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.team-card-note strong { color: var(--ink); font-weight: 600; }
+.team-people { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.team-person { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.team-person:last-child { border-bottom: 0; }
+.team-person.is-pending { opacity: 0.8; }
+.team-avatar { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--accent-wash); color: var(--accent-text); font-size: 13px; font-weight: 600; }
+.team-person-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.team-person-name { font-size: 13.5px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-person-sub { font-size: 12.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-person-usage { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-size: 11.5px; color: var(--ink-3); }
+.team-person-usage strong { font-size: 13px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.team-person-action { flex: none; height: 28px; padding: 0 10px; font-size: 12.5px; }
+.team-card-foot { display: flex; align-items: center; gap: 10px; padding: 14px 18px 16px; border-top: 1px solid var(--line); }
+.team-card-hint { font-size: 13px; color: var(--ink-3); }
+.team-upsell { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 4px 18px 18px; }
+.team-upsell .team-card-note { padding: 0; }
+.team-upsell-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-md); background: var(--accent-wash); color: var(--accent-text); }
+.team-notice { margin: 0; padding: 0 18px 14px; font-size: 13px; color: var(--ink-2); word-break: break-word; }
 .team-notice.is-success { color: var(--good); }
 .team-notice.is-error { color: var(--bad); }
+.pricing-section .team-notice { padding: 0; }
+
+/* Team usage (pricing) */
+.team-usage-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.team-usage-head h2 { margin: 0 0 4px; }
+.team-usage-range { display: inline-flex; padding: 3px; border-radius: var(--r-pill); background: var(--wash); }
+.team-usage-range button { height: 28px; padding: 0 12px; border: 0; border-radius: var(--r-pill); background: transparent; font-size: 12.5px; color: var(--ink-2); }
+.team-usage-range button.is-active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-xs); }
+.team-usage-table { border-radius: 14px; background: var(--surface); box-shadow: 0 0 0 1px var(--line), var(--shadow-xs); overflow: hidden; }
+.team-usage-row { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.team-usage-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.team-usage-name { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--ink); }
+.team-usage-name em { font-style: normal; padding: 1px 7px; border-radius: var(--r-pill); background: var(--wash); font-size: 11.5px; font-weight: 500; color: var(--ink-3); }
+.team-usage-bar { display: block; height: 6px; border-radius: var(--r-pill); background: var(--wash); overflow: hidden; }
+.team-usage-bar span { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: var(--accent); }
+.team-usage-agents { font-size: 12px; color: var(--ink-3); white-space: pre-wrap; }
+.team-usage-num { flex: none; min-width: 110px; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; color: var(--ink-3); }
+.team-usage-num strong { font-size: 18px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.team-usage-total { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; background: var(--wash); font-size: 13px; color: var(--ink-2); }
+.team-usage-total strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.team-usage-empty { margin: 0; padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+@media (max-width: 560px) {
+  .team-usage-row { align-items: flex-start; }
+  .team-usage-num { min-width: 0; }
+}
+
+/* Project sharing */
+.project-card-share { display: inline-flex; align-items: center; gap: 6px; color: var(--accent-text); }
+.project-card-shared { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px; font-size: 12.5px; color: var(--ink-3); }
+.credit-usage-who { padding: 1px 7px; border-radius: var(--r-pill); font-size: 11.5px; color: var(--accent-text); background: var(--accent-wash); }
 .pricing-card.is-current { box-shadow: inset 0 0 0 1.5px var(--good), var(--shadow-sm); }
 .pricing-badge.is-current { background: var(--good); }
 .pricing-cta.is-current-plan:disabled { opacity: 1; color: var(--good); background: var(--good-wash); box-shadow: none; }
@@ -1208,3 +1252,11 @@ button.card:hover .card-arrow,
 .disc-link-danger { align-self: flex-start; padding: 0; border: 0; background: none; font-size: 12.5px; color: var(--bad); }
 .disc-error { margin: 0; font-size: 13px; color: var(--bad); }
 .disc-muted { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+
+.credits-modal { display: flex; flex-direction: column; gap: 14px; }
+.credits-modal-packs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.credits-modal-packs .pricing-topup span { color: var(--accent); font-weight: 600; }
+.credits-modal-error { margin: 0; font-size: 13px; color: var(--danger, #c0392b); }
+.credits-modal-plans { align-self: center; }
+.pricing-table .pricing-table-note { color: var(--ink-2); font-size: 12.5px; }
+.pricing-subheading { margin: 14px 0 0; }

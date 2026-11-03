@@ -17,8 +17,13 @@ function teamRef(ownerUid) {
   return db().collection("teams").doc(ownerUid);
 }
 
+/** Max teammates on the plan (owner is not counted). Business = 3 teammates. */
 export function seatLimit(plan) {
   return PLANS[plan]?.seats || 1;
+}
+
+function teammatesInUse(members, invites) {
+  return (members?.length || 0) + (invites?.length || 0);
 }
 
 /**
@@ -46,7 +51,7 @@ export async function getTeam(uid) {
   const billing = await resolveBilling(uid);
   if (billing.teamOwner) {
     const owner = await adminAuth().getUser(billing.teamOwner);
-    return { role: "member", ownerEmail: owner.email, plan: billing.plan };
+    return { role: "member", ownerUid: billing.teamOwner, ownerEmail: owner.email, ownerName: owner.displayName || owner.email?.split("@")[0] || "", plan: billing.plan };
   }
   const snap = await teamRef(uid).get();
   const data = snap.exists ? snap.data() : {};
@@ -76,8 +81,8 @@ export async function inviteMember(ownerUid, rawEmail) {
     const members = data.members || [];
     const invites = (data.invites || []).filter((i) => i.email !== email);
     if (members.some((m) => m.email === email)) throw fail("That person is already on your team.", 400);
-    if (1 + members.length + invites.length >= seats) {
-      throw fail(`Your plan includes ${seats} seats and they're all taken. Remove someone to invite a new person.`, 403);
+    if (teammatesInUse(members, invites) >= seats) {
+      throw fail(`Your plan includes ${seats} teammate seats and they're all taken. Remove someone to invite a new person.`, 403);
     }
     invites.push({ email, tokenHash: hash(token), createdAt: new Date().toISOString() });
     tx.set(teamRef(ownerUid), { members, invites, ownerEmail: owner.email || "", updatedAt: FieldValue.serverTimestamp() });

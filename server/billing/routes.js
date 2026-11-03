@@ -3,12 +3,14 @@ import Stripe from "stripe";
 import { identify } from "../credits/middleware.js";
 import { findUidByCustomer, getCreditAccount, grantCredits, updateCreditAccount } from "../credits/store.js";
 import { requestOrigin } from "../integrations/http.js";
+import { rewardReferralOnPayment } from "../referrals.js";
 import { PLANS, TOPUP_PACKS, topupPrice } from "../../src/plans.js";
 
 /** Stripe Price IDs per plan and interval, read from env so test and live modes can differ. */
 const PRICE_ENV = {
   pro: { month: "STRIPE_PRICE_PRO_MONTHLY", year: "STRIPE_PRICE_PRO_ANNUAL" },
   business: { month: "STRIPE_PRICE_BUSINESS_MONTHLY", year: "STRIPE_PRICE_BUSINESS_ANNUAL" },
+  agency: { month: "STRIPE_PRICE_AGENCY_MONTHLY", year: "STRIPE_PRICE_AGENCY_ANNUAL" },
 };
 
 let client = null;
@@ -120,6 +122,7 @@ async function handleEvent(event) {
     if (object.payment_status !== "paid") return;
     const credits = Number(object.metadata.credits) || 0;
     await grantCredits(object.metadata.uid, credits, { eventId: event.id, label: `Top-up: ${credits} credits` });
+    if ((object.amount_total || 0) > 0) await rewardReferralOnPayment(object.metadata.uid);
     return;
   }
 
@@ -136,6 +139,7 @@ async function handleEvent(event) {
       label: `${plan.name} plan credits`,
       patch: { plan: match.plan, billingInterval: match.interval, stripeCustomerId: object.customer },
     });
+    if ((object.amount_paid || 0) > 0) await rewardReferralOnPayment(uid);
     return;
   }
 

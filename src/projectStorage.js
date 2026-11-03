@@ -44,6 +44,7 @@ function normalizeProject(entry, profile) {
       website: entry.website || "",
       knowledge: entry.knowledge || null,
       logo: entry.logo || "",
+      ...(entry.shareId ? { shareId: entry.shareId } : {}),
     };
   }
   if (typeof entry === "string" && entry.trim()) {
@@ -75,7 +76,9 @@ export function loadProjects(uid, profile) {
 export function saveProjects(uid, projects) {
   if (!uid) return;
   try {
+    // Projects shared with you by a teammate come from the server and are never stored as your own.
     const list = projects
+      .filter((item) => !item?.shared)
       .map((item) => normalizeProject(item))
       .filter(Boolean)
       .filter((item, index, all) => all.findIndex((other) => other.name === item.name) === index);

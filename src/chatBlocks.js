@@ -122,6 +122,7 @@ export function extractLatestAuditDock(messages) {
       signature,
       rerunLabel: action?.label || "Re-run audit after fixes",
       rerunMessage,
+      messageIndex: i,
     };
   }
 

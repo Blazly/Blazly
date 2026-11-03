@@ -60,7 +60,7 @@ function hostOf(url) {
   }
 }
 
-export function IntegrationsView({ uid, project, website, notice }) {
+export function IntegrationsView({ uid, project, website, notice, managedBy }) {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -81,6 +81,25 @@ export function IntegrationsView({ uid, project, website, notice }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  if (managedBy) {
+    return (
+      <div className="page integrations-page">
+        <header className="page-intro">
+          <div className="page-intro-text">
+            <h1>Integrations</h1>
+            <p className="subpage-lead">
+              <strong>{project}</strong> is shared with you by {managedBy}. Its website and analytics connections are
+              managed by {managedBy}.
+            </p>
+          </div>
+        </header>
+        <p className="integration-notice is-info">
+          Ask {managedBy} to connect Google Search Console, GA4, Webflow or WordPress for this project.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="page integrations-page">
@@ -131,12 +150,12 @@ export function IntegrationsView({ uid, project, website, notice }) {
   );
 }
 
-function IntegrationShell({ icon, title, subtitle, connected, children }) {
+function IntegrationShell({ icon, logos, title, subtitle, connected, children }) {
   return (
     <section className={`integration-card${connected ? " is-connected" : ""}`}>
       <header className="integration-card-head">
-        <span className="integration-card-icon">
-          <Icon name={icon} size={18} />
+        <span className={`integration-card-icon${logos ? " has-logo" : ""}${logos?.length > 1 ? " is-pair" : ""}`}>
+          {logos ? logos.map((src) => <img key={src} src={src} alt="" width={20} height={20} />) : <Icon name={icon} size={18} />}
         </span>
         <span className="integration-card-copy">
           <span className="integration-card-title">{title}</span>
@@ -197,6 +216,7 @@ function WordPressCard({ uid, project, website, status, onChange }) {
   return (
     <IntegrationShell
       icon="fileText"
+      logos={["/assets/integrations/wordpress.svg"]}
       title="WordPress"
       subtitle="Publish and update blog posts live on your site."
       connected={status.connected}
@@ -360,6 +380,7 @@ function WebflowCard({ uid, project, website, status, configured, onChange }) {
   return (
     <IntegrationShell
       icon="globe"
+      logos={["/assets/integrations/webflow.svg"]}
       title="Webflow"
       subtitle="Publish blog posts live to your Webflow CMS collection."
       connected={Boolean(ready)}
@@ -681,6 +702,7 @@ function GoogleCard({ uid, project, website, status, configured, onChange }) {
   return (
     <IntegrationShell
       icon="trendingUp"
+      logos={["/assets/integrations/googlesearchconsole.svg", "/assets/integrations/googleanalytics.svg"]}
       title="Google Search Console & GA4"
       subtitle="Real queries, rankings, index status, sitemaps, traffic, and conversions."
       connected={status.connected}

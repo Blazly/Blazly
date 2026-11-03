@@ -32,6 +32,10 @@ export function PromptShell({
   isCompact = false,
   activeAgent,
   onClearAgent,
+  reuseAgent,
+  onReuseAgent,
+  agents,
+  onPickAgent,
   prompt,
   promptRef,
   placeholder,
@@ -52,6 +56,23 @@ export function PromptShell({
   busy,
 }) {
   const [effortOpen, setEffortOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const addRootRef = useRef(null);
+
+  useEffect(() => {
+    if (!addOpen) return;
+    const onDoc = (event) => {
+      if (addRootRef.current?.contains(event.target)) return;
+      setAddOpen(false);
+    };
+    const onKey = (event) => event.key === "Escape" && setAddOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [addOpen]);
   const [listening, setListening] = useState(false);
   const effortRootRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -153,6 +174,7 @@ export function PromptShell({
     <div className={`composer-wrap${isCompact ? " is-compact" : ""}`}>
       <form
         className={`composer${activeAgent ? " has-agent" : ""}`}
+        style={activeAgent?.color ? { "--agent-c": activeAgent.color } : undefined}
         onSubmit={(event) => {
           event.preventDefault();
           onSubmit();
@@ -169,7 +191,14 @@ export function PromptShell({
             event.target.value = "";
           }}
         />
-        {activeAgent ? <PromptAgentChip agent={activeAgent} onClear={onClearAgent} /> : null}
+        {activeAgent ? (
+          <PromptAgentChip agent={activeAgent} onClear={onClearAgent} />
+        ) : reuseAgent ? (
+          <button type="button" className="composer-agent-reuse" onClick={() => onReuseAgent(reuseAgent)}>
+            <Icon name={reuseAgent.icon} size={14} />
+            Use {reuseAgent.title} again
+          </button>
+        ) : null}
         {status && (
           <p className="composer-status" role="status">
             <Icon name="info" size={15} />
@@ -190,15 +219,52 @@ export function PromptShell({
         />
         <div className="composer-toolbar">
           <div className="composer-toolbar-start">
-            <button
-              type="button"
-              className="composer-icon-btn"
-              aria-label="Add attachment"
-              title="Attach files or images"
-              onClick={() => fileRef.current?.click()}
-            >
-              <Icon name="plus" size={18} />
-            </button>
+            <div className="composer-add" ref={addRootRef}>
+              <button
+                type="button"
+                className="composer-icon-btn"
+                aria-label={agents?.length ? "Add files or an agent" : "Add attachment"}
+                title={agents?.length ? "Upload files or pick an agent" : "Attach files or images"}
+                aria-expanded={agents?.length ? addOpen : undefined}
+                onClick={() => (agents?.length ? setAddOpen((open) => !open) : fileRef.current?.click())}
+              >
+                <Icon name="plus" size={18} />
+              </button>
+              {addOpen && agents?.length ? (
+                <div className="composer-add-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="composer-add-item"
+                    onClick={() => {
+                      setAddOpen(false);
+                      fileRef.current?.click();
+                    }}
+                  >
+                    <Icon name="paperclip" size={15} />
+                    <span>Upload files or images</span>
+                  </button>
+                  <p className="composer-add-label">Agents</p>
+                  {agents.map((agent) => (
+                    <button
+                      key={agent.id}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={activeAgent?.id === agent.id}
+                      className={`composer-add-item${activeAgent?.id === agent.id ? " is-active" : ""}`}
+                      onClick={() => {
+                        setAddOpen(false);
+                        onPickAgent(agent);
+                      }}
+                    >
+                      <Icon name={agent.icon} size={15} />
+                      <span>{agent.title}</span>
+                      {activeAgent?.id === agent.id ? <Icon name="check" size={14} /> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
           <div className="composer-toolbar-end">
             <div className="composer-effort" ref={effortRootRef}>

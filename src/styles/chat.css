@@ -156,6 +156,27 @@
   gap: 4px;
 }
 
+.chat-user-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.chat-user-author-avatar {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-wash);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: 600;
+}
+
 .chat-msg.is-user {
   max-width: min(85%, 620px);
   padding: 10px 16px;

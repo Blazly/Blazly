@@ -40,7 +40,7 @@ export async function getCreditAccount(uid) {
 }
 
 /** Holds credits before an agent runs; throws 402 when the balance is too low. */
-export async function reserveCredits(uid, amount, { agent, label, source, minimum }) {
+export async function reserveCredits(uid, amount, { agent, label, source, minimum, actorUid }) {
   const ref = db().collection("credits").doc(uid);
   const txRef = ref.collection("transactions").doc();
   let held = amount;
@@ -76,6 +76,7 @@ export async function reserveCredits(uid, amount, { agent, label, source, minimu
       agent,
       label,
       source: source || "app",
+      actorUid: actorUid || uid,
       reserved: held,
       amount: held,
       createdAt: FieldValue.serverTimestamp(),
@@ -155,6 +156,7 @@ export async function recentTransactions(uid, limit = 25) {
       agent: data.agent || null,
       amount: data.amount,
       source: data.source || null,
+      actorUid: data.actorUid || String(data.source || "").match(/team-member:([A-Za-z0-9_-]+)/)?.[1] || null,
       createdAt: data.createdAt?.toDate?.().toISOString() || null,
     };
   });

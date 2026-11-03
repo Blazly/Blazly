@@ -20,7 +20,6 @@ const AGENT_ENDPOINTS = {
   "ai-visibility-tracker": { path: "/api/ai-visibility", body: base },
   "brand-sentiment-analysis": { path: "/api/brand-sentiment", body: base },
   "competitor-research": { path: "/api/competitor-research", body: base },
-  "reels-creation": { path: "/api/reels-creation", body: (s) => ({ message: s.agentMessage }) },
   "site-integrations": {
     path: "/api/integrations/agent",
     body: (s, c, prev) => ({
@@ -44,7 +43,13 @@ function firstUrl(text) {
   return String(text || "").match(/https?:\/\/[^\s)]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s)]*)?/i)?.[0] || "";
 }
 
-async function callAgentSse(baseUrl, path, body, timeoutMs, ctx) {
+export function agentRequest(step, ctx, prev) {
+  const endpoint = AGENT_ENDPOINTS[step.agentId];
+  if (!endpoint) throw new Error(`Agent "${step.agentId}" can't run automatically.`);
+  return { path: endpoint.path, body: endpoint.body(step, ctx, prev) };
+}
+
+export async function callAgentSse(baseUrl, path, body, timeoutMs, ctx, onProgress) {
   const response = await fetch(`${baseUrl}${path}?stream=1`, {
     method: "POST",
     headers: {
@@ -81,6 +86,7 @@ async function callAgentSse(baseUrl, path, body, timeoutMs, ctx) {
         continue;
       }
       if (event.type === "error") throw new Error(event.error || "Agent failed.");
+      if (event.type === "progress") onProgress?.(event);
       if (event.type === "complete") {
         reader.cancel().catch(() => {});
         return String(event.content || "").trim();
@@ -102,10 +108,10 @@ export async function runJobSteps(job, { baseUrl, timeoutMs = 25 * 60 * 1000 }) 
     knowledge: job.knowledge || null,
     brandName: job.brandName || "",
   };
-  return runSteps(job.steps, ctx, { baseUrl, timeoutMs });
+  return runSteps(job.steps, ctx, { baseUrl, timeoutMs, article: job.article || null });
 }
 
-export async function runSteps(steps, ctx, { baseUrl, timeoutMs = 25 * 60 * 1000, history = [] }) {
+export async function runSteps(steps, ctx, { baseUrl, timeoutMs = 25 * 60 * 1000, history = [], article = null }) {
   const messages = [...history];
   for (const step of steps) {
     const endpoint = AGENT_ENDPOINTS[step.agentId];
@@ -115,7 +121,7 @@ export async function runSteps(steps, ctx, { baseUrl, timeoutMs = 25 * 60 * 1000
       messages,
       article: latest?.html
         ? { title: latest.blogTitle || latest.metaTitle, html: latest.html, metaDescription: latest.metaDescription, slug: latest.urlSlug }
-        : null,
+        : article,
     };
     messages.push({ role: "user", content: step.agentMessage });
     const content = await callAgentSse(baseUrl, endpoint.path, endpoint.body(step, ctx, prev), timeoutMs, ctx);

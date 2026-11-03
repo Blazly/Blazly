@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "./Icon.jsx";
 import { ReferralCard } from "./ReferralCard.jsx";
+import { TeamUsageCard } from "./TeamUsageCard.jsx";
 import { PLAN_ORDER, PLANS, TOPUP_PACKS, topupPrice } from "./plans.js";
 import { fetchBillingConfig, openBillingPortal, startPlanCheckout, startTopupCheckout } from "./billingClient.js";
 
@@ -9,22 +10,34 @@ const NOTICES = {
   "topup-success": { tone: "success", text: "Top-up complete. Your new credits will appear in a few seconds." },
   cancelled: { tone: "info", text: "Checkout cancelled. Nothing was charged." },
   "project-limit": { tone: "info", text: "You've reached the project limit for your plan. Upgrade to add more projects." },
-  "project-edit": { tone: "info", text: "Editing and deleting projects is available on Pro and Business. Upgrade to change your project's name or website (once every 30 days)." },
+  "project-edit": { tone: "info", text: "Editing and deleting projects is available on Pro, Business and Agency. Upgrade to change your project's name or website (once every 30 days)." },
 };
 
 const MODE_ROWS = [
   ["Who picks the agent", "You", "Blazly's AI router"],
   ["Extra cost", "None", "+1 credit per message"],
   ["Agent prices", "Standard", "Same as manual"],
-  ["Chain several agents", "One at a time", "Up to 4 per scheduled task (Pro and Business)"],
-  ["Scheduling", "—", "Pro and Business"],
+  ["Chain several agents", "One at a time", "Up to 4 per scheduled task (paid plans)"],
+  ["Scheduling", "—", "Pro, Business and Agency"],
 ];
 
-const EXAMPLES = [
-  ["Keyword research", 5, 6],
-  ["Standard blog post", 30, 31],
-  ["Blog + publish to WordPress", 35, 36],
-  ["Competitor research", 70, 71],
+const AGENT_COSTS = [
+  ["Chat assistant", "1", "2", "Per message"],
+  ["Keyword research", "5", "6", "Per keyword"],
+  ["SERP rank tracking", "5", "6", "Per check"],
+  ["Website & analytics (WordPress, Webflow, GSC, GA4)", "5", "6", "Per publish or report"],
+  ["Humanization", "10–30", "11–31", "10 per 2,000 words"],
+  ["Prompt research", "20", "21", "Per run"],
+  ["Ranking opportunity finder", "25", "26", "Per run"],
+  ["Blog writer (standard)", "30", "31", "Per article"],
+  ["Blog writer (max effort)", "100", "101", "Long-form, deeper research"],
+  ["Backlink finder", "30", "31", "Per run"],
+  ["Local SEO", "30", "31", "Per audit"],
+  ["AI visibility tracker", "35", "36", "ChatGPT, Gemini and Grok"],
+  ["Brand sentiment analysis", "45", "46", "Per run"],
+  ["Competitor research", "70", "71", "Per run"],
+  ["B2B lead finder", "70", "71", "Per search, verified emails"],
+  ["Full site audit", "15–1,510", "16–1,511", "10 + 5 per page (10 / 50 / 100 / 300 pages by plan)"],
 ];
 
 function formatPrice(value) {
@@ -158,14 +171,12 @@ export function PricingView({ credits, email, notice: initialNotice }) {
         })}
       </div>
 
-      <ReferralCard />
-
-      <section className="pricing-section">
-        <h2>Need more credits?</h2>
+      <section className="pricing-section pricing-topup-section">
+        <h2><Icon name="bolt" size={17} /> Need more credits?</h2>
         <p className="pricing-section-note">
           {paid
-            ? "Top-up credits never expire and roll over with your plan credits."
-            : "Top-ups are available on Pro and Business."}
+            ? "Top-up credits never expire. They are only used when you run an agent, and roll over with your plan credits."
+            : "Top-ups are available on Pro, Business and Agency."}
         </p>
         <div className="pricing-topups">
           {TOPUP_PACKS.map((pack) => {
@@ -179,12 +190,17 @@ export function PricingView({ credits, email, notice: initialNotice }) {
                 onClick={() => run(`topup-${pack}`, () => startTopupCheckout(pack, email))}
               >
                 <strong>{pack.toLocaleString()} credits</strong>
-                <span>{price ? formatPrice(price) : `from ${formatPrice(topupPrice("business", pack))}`}</span>
+                <span>{price ? formatPrice(price) : formatPrice(topupPrice("pro", pack))}</span>
               </button>
             );
           })}
         </div>
       </section>
+
+      <TeamUsageCard />
+
+      <ReferralCard />
+
 
       <section className="pricing-section">
         <h2>AI mode vs manual mode</h2>
@@ -212,21 +228,25 @@ export function PricingView({ credits, email, notice: initialNotice }) {
             </tbody>
           </table>
         </div>
+        <h2 className="pricing-subheading">Approximate credits per agent</h2>
+        <p className="pricing-section-note">Credits are only used when an agent runs. Ranges depend on the size of the job.</p>
         <div className="pricing-table-wrap">
           <table className="pricing-table">
             <thead>
               <tr>
-                <th>Example task</th>
+                <th>Agent</th>
                 <th>Manual</th>
                 <th>AI mode</th>
+                <th>How it's counted</th>
               </tr>
             </thead>
             <tbody>
-              {EXAMPLES.map(([task, manual, ai]) => (
-                <tr key={task}>
-                  <th scope="row">{task}</th>
+              {AGENT_COSTS.map(([agent, manual, ai, note]) => (
+                <tr key={agent}>
+                  <th scope="row">{agent}</th>
                   <td>{manual} credits</td>
                   <td>{ai} credits</td>
+                  <td className="pricing-table-note">{note}</td>
                 </tr>
               ))}
             </tbody>

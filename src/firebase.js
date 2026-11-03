@@ -48,6 +48,7 @@ export function installAuthFetch() {
     if (response.status === 402 || (response.ok && CREDIT_PATHS.some((p) => url.includes(p)))) {
       window.dispatchEvent(new CustomEvent("blazly:credits-changed"));
     }
+    if (response.status === 402) window.dispatchEvent(new CustomEvent("blazly:out-of-credits"));
     return response;
   };
 }
@@ -69,7 +70,6 @@ const CREDIT_PATHS = [
   "/api/b2b-lead-finder",
   "/api/blog-writer",
   "/api/site-audit",
-  "/api/reels-creation",
 ];
 
 export async function fetchCredits() {

@@ -26,8 +26,8 @@ export function ReferralCard() {
           <Icon name="users" size={18} />
         </span>
         <div>
-          <h2>Invite friends, earn {data?.reward || 100} credits</h2>
-          <p>Share your link. Each person who signs up with it gives you {data?.reward || 100} free credits.</p>
+          <h2>Invite friends, earn {data?.reward || 250} credits</h2>
+          <p>Share your link. Each person who signs up with it and buys a paid plan gives you {data?.reward || 250} free credits.</p>
         </div>
       </div>
       {error ? (
@@ -44,6 +44,9 @@ export function ReferralCard() {
         <div className="referral-stats">
           <span>
             <strong>{data.joined}</strong> joined
+          </span>
+          <span>
+            <strong>{data.paid || 0}</strong> upgraded
           </span>
           <span>
             <strong>{data.earned.toLocaleString()}</strong> credits earned

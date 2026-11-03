@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   createUserWithEmailAndPassword,
+  getAdditionalUserInfo,
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
@@ -16,6 +17,7 @@ import {
   saveUserProfile,
   updateUserProfileFields,
 } from "./firebase.js";
+import { BUSINESS_EMAIL_MESSAGE, isPersonalEmail } from "./businessEmail.js";
 
 const AuthContext = createContext(null);
 
@@ -45,33 +47,42 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(cached?.profile ?? null);
   const [ready, setReady] = useState(false);
+  /** uid whose profile is settled; the app waits rather than assuming onboarding is unfinished. */
+  const [profileUid, setProfileUid] = useState(cached?.uid ?? null);
+  const profileUidRef = useRef(profileUid);
+  profileUidRef.current = profileUid;
+  /** True while a popup sign-in is still being screened, so the app never opens for a rejected account. */
+  const [authChecking, setAuthChecking] = useState(false);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (next) => {
       setUser(next);
+      setReady(true);
       if (!next) {
         setProfile(null);
+        setProfileUid(null);
         rememberProfile(null, null);
-        setReady(true);
         return;
       }
       const saved = readCachedProfile();
-      if (saved?.uid === next.uid) {
+      if (saved?.uid === next.uid && saved.profile?.onboardingComplete === true) {
         setProfile(saved.profile);
-        setReady(true);
+        setProfileUid(next.uid);
+      } else if (profileUidRef.current !== next.uid) {
+        setProfileUid(null);
       }
-      const request = loadUserProfile(next.uid);
-      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 2000));
-      Promise.race([request, timeout])
-        .catch(() => null)
-        .finally(() => setReady(true));
-      request
+      loadUserProfile(next.uid)
         .then((loaded) => {
-          if (!loaded) return;
-          setProfile(loaded);
-          rememberProfile(next.uid, loaded);
+          if (auth.currentUser?.uid !== next.uid) return;
+          if (loaded) {
+            setProfile(loaded);
+            rememberProfile(next.uid, loaded);
+          }
+          setProfileUid(next.uid);
         })
-        .catch(() => {});
+        .catch(() => {
+          if (auth.currentUser?.uid === next.uid) setProfileUid(next.uid);
+        });
     });
   }, []);
 
@@ -80,7 +91,10 @@ export function AuthProvider({ children }) {
       user,
       profile,
       ready,
+      profileUid,
+      authChecking,
       async signUp({ name, email, password, verificationToken }) {
+        if (isPersonalEmail(email)) throw Object.assign(new Error(BUSINESS_EMAIL_MESSAGE), { code: "blazly/personal-email", otp: true });
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(cred.user, { displayName: name });
         try {
@@ -91,8 +105,9 @@ export function AuthProvider({ children }) {
         } catch {
           // Auth still succeeds if Firestore rules are not published yet.
         }
-        setProfile((current) => ({ ...current, name, email }));
+        setProfile({ name, email, onboardingComplete: false });
         rememberProfile(cred.user.uid, { name, email, onboardingComplete: false });
+        setProfileUid(cred.user.uid);
         setUser(auth.currentUser);
         return cred.user;
       },
@@ -103,24 +118,47 @@ export function AuthProvider({ children }) {
         return sendPasswordResetEmail(auth, email);
       },
       async signInWithGoogle() {
-        const cred = await signInWithPopup(auth, googleProvider);
+        setAuthChecking(true);
+        let cred;
+        try {
+          cred = await signInWithPopup(auth, googleProvider);
+        } catch (error) {
+          setAuthChecking(false);
+          throw error;
+        }
+        // Business-email only: drop the account Google just created, or sign out an older personal one.
+        if (isPersonalEmail(cred.user.email)) {
+          if (getAdditionalUserInfo(cred)?.isNewUser) await cred.user.delete().catch(() => {});
+          await signOut(auth).catch(() => {});
+          rememberProfile(null, null);
+          setProfile(null);
+          setProfileUid(null);
+          setAuthChecking(false);
+          throw Object.assign(new Error(BUSINESS_EMAIL_MESSAGE), { code: "blazly/personal-email" });
+        }
+        setAuthChecking(false);
         try {
           await saveUserProfile(cred.user);
         } catch {
           // Auth still succeeds if Firestore rules are not published yet.
         }
-        setProfile((current) => ({
-          ...current,
-          name: cred.user.displayName || "",
-          email: cred.user.email || "",
-        }));
+        setProfile((current) =>
+          current
+            ? {
+                ...current,
+                name: cred.user.displayName || current.name || "",
+                email: cred.user.email || current.email || "",
+              }
+            : current
+        );
         const previous = readCachedProfile();
-        const base = previous?.uid === cred.user.uid ? previous.profile : {};
-        rememberProfile(cred.user.uid, {
-          ...base,
-          name: cred.user.displayName || base.name || "",
-          email: cred.user.email || base.email || "",
-        });
+        if (previous?.uid === cred.user.uid && previous.profile?.onboardingComplete) {
+          rememberProfile(cred.user.uid, {
+            ...previous.profile,
+            name: cred.user.displayName || previous.profile.name || "",
+            email: cred.user.email || previous.profile.email || "",
+          });
+        }
         return cred.user;
       },
       async completeOnboarding(data) {
@@ -157,7 +195,7 @@ export function AuthProvider({ children }) {
         return signOut(auth);
       },
     }),
-    [user, profile, ready]
+    [user, profile, ready, profileUid, authChecking]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

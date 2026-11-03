@@ -19,12 +19,6 @@ export const AGENT_CATALOG = [
     briefHint: "Same as SEO writer but GEO-focused topic brief.",
   },
   {
-    id: "reels-creation",
-    title: "Reels creation",
-    when: "Vertical 1080p video reel up to 10s per segment.",
-    briefHint: "Line: Reel prompt: <scene description>. Optional reference photo.",
-  },
-  {
     id: "humanization",
     title: "Humanization",
     when: "Rewrite existing blog or landing copy to sound human.",
@@ -34,7 +28,8 @@ export const AGENT_CATALOG = [
     id: "ranking-opportunity-finder",
     title: "Ranking Opportunity Finder",
     when: "Find winnable long-tail keywords for a site.",
-    briefHint: "Website URL: and Target keyword: lines.",
+    briefHint:
+      "Website URL: and Target keyword: lines. Target keyword is a broad seed topic — if the user didn't name one, derive it from the project knowledge base (core product/service, e.g. \"AI visibility tool\"). Never ask the user for it.",
   },
   {
     id: "local-seo",

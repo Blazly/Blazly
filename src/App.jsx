@@ -5,19 +5,47 @@ import { Onboarding } from "./Onboarding.jsx";
 import { useAuth } from "./AuthContext.jsx";
 import { SharedChatView } from "./SharedChatView.jsx";
 import { shareIdFromLocation } from "./chatShare.js";
+import { Ga4AuthTracker, Ga4ShareTracker, Ga4UserTracker } from "./Ga4Tracker.jsx";
 
 export default function App() {
   const [shareId] = useState(() => shareIdFromLocation());
-  if (shareId) return <SharedChatView shareId={shareId} />;
-  return <AuthedApp />;
+  if (shareId) {
+    return (
+      <>
+        <Ga4ShareTracker shareId={shareId} />
+        <SharedChatView shareId={shareId} />
+      </>
+    );
+  }
+  return (
+    <>
+      <Ga4UserTracker />
+      <AuthedApp />
+    </>
+  );
 }
 
 function AuthedApp() {
-  const { user, profile, ready } = useAuth();
+  const { user, profile, ready, profileUid, authChecking } = useAuth();
 
-  if (!ready && !profile) return <div className="auth-gate" />;
-  if (ready && !user) return <AuthScreen />;
-  if (!profile?.onboardingComplete) return <Onboarding />;
+  if (!ready) return <div className="auth-gate" />;
+  if (!user || authChecking) {
+    return (
+      <>
+        <Ga4AuthTracker screen="auth" />
+        <AuthScreen />
+      </>
+    );
+  }
+  if (profileUid !== user.uid) return <div className="auth-gate" />;
+  if (!profile?.onboardingComplete) {
+    return (
+      <>
+        <Ga4AuthTracker screen="onboarding" />
+        <Onboarding />
+      </>
+    );
+  }
 
   return <Workspace />;
 }

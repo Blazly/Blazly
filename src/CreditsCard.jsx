@@ -121,7 +121,10 @@ export function CreditsCard() {
             <li key={t.id}>
               <span className="credit-usage-label">
                 {t.label}
-                {t.source && t.source !== "app" ? <span className="credit-usage-source">{t.source}</span> : null}
+                {t.actorName ? <span className="credit-usage-who">{t.actorName}</span> : null}
+                {t.source && t.source !== "app" && !t.source.includes("team-member") ? (
+                  <span className="credit-usage-source">{t.source}</span>
+                ) : null}
               </span>
               <span className="credit-usage-when">{formatWhen(t.createdAt)}</span>
               <span className="credit-usage-amount">−{t.amount}</span>

@@ -1,3 +1,15 @@
+export const SITE_INTEGRATIONS_BRIEF = "What do you want to know:";
+
+export function isEmptySiteIntegrationsBrief(text) {
+  const normalized = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .toLowerCase();
+  if (!normalized) return true;
+  if (normalized === SITE_INTEGRATIONS_BRIEF.trim().toLowerCase()) return true;
+  return /^what do you want to know:\s*$/i.test(normalized);
+}
+
 async function json(response, fallback) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || fallback);
@@ -7,6 +19,35 @@ async function json(response, fallback) {
 export async function fetchIntegrationStatus(uid, project) {
   const qs = new URLSearchParams({ uid, project });
   return json(await fetch(`/api/integrations/status?${qs}`), "Could not load integrations.");
+}
+
+export function hasPublishingIntegration(status) {
+  return Boolean(status?.wordpress?.connected || status?.webflow?.connected || status?.webhook?.connected);
+}
+
+export const FOLLOW_UP = {
+  publish: "/blog-publish",
+  schedule: "/blog-schedule",
+  scheduleAt: "/blog-schedule-at ",
+  fixAudit: "/audit-fix",
+};
+
+export async function integrationFollowUp(kind, uid, project) {
+  if (!uid) return "";
+  try {
+    if (!hasPublishingIntegration(await fetchIntegrationStatus(uid, project))) return "";
+  } catch {
+    return "";
+  }
+  if (kind === "blog") {
+    return [
+      "Your website is connected. Publish this blog now, or schedule it?",
+      "",
+      `ACTION|Publish|${FOLLOW_UP.publish}`,
+      `SECONDARY_ACTION|Schedule|${FOLLOW_UP.schedule}`,
+    ].join("\n");
+  }
+  return ["Your website is connected. Can I fix these issues for you?", "", `ACTION|Fix these issues|${FOLLOW_UP.fixAudit}`].join("\n");
 }
 
 export async function connectWordPress({ uid, project, username, appPassword }) {

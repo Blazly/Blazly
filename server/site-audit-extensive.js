@@ -12,6 +12,8 @@ import {
   estimateAuditRemainingSeconds,
   estimateAuditTotalSeconds,
 } from "./site-audit/constants.js";
+import { currentPlan } from "./billing/entitlements.js";
+import { auditPageLimit } from "../src/plans.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const jiti = createJiti(__dirname, { interopDefault: true, esmResolve: true });
@@ -138,6 +140,7 @@ export async function runExtensiveSiteAudit(website, { dataForSeo, apiKey, model
   const domainUrl = normalizeDomainUrl(website);
   const domain = new URL(domainUrl).hostname.replace(/^www\./, "");
   const projectName = domain;
+  const maxPages = Math.min(auditPageLimit(currentPlan()), SITE_AUDIT_MAX_PAGES);
 
   const hasPageSpeedKey = !!(process.env.PAGESPEED_API_KEY || process.env.GOOGLE_PAGESPEED_API_KEY);
   const etaOptions = { hasAnthropicKey: !!apiKey, hasPageSpeedKey };
@@ -145,20 +148,20 @@ export async function runExtensiveSiteAudit(website, { dataForSeo, apiKey, model
   onProgress?.({
     type: "progress",
     phase: "sitemap",
-    message: `Mapping site (up to ${SITE_AUDIT_MAX_PAGES} pages · ${SITE_AUDIT_CHECK_COUNT} checks each)`,
+    message: `Mapping site (up to ${maxPages} pages · ${SITE_AUDIT_CHECK_COUNT} checks each)`,
     current: 0,
     total: 0,
-    totalToAudit: SITE_AUDIT_MAX_PAGES,
-    etaSeconds: estimateAuditTotalSeconds(SITE_AUDIT_MAX_PAGES, etaOptions),
+    totalToAudit: maxPages,
+    etaSeconds: estimateAuditTotalSeconds(maxPages, etaOptions),
   });
 
-  const siteContext = await buildSiteContext(domainUrl, SITE_AUDIT_MAX_PAGES);
+  const siteContext = await buildSiteContext(domainUrl, maxPages);
   const origin = siteContext.origin || domainUrl;
   let urls = siteContext.projectPages.length ? siteContext.projectPages : [origin];
   if (!urls.some((u) => new URL(u).pathname === "/" || new URL(u).pathname === "")) {
     urls = [origin, ...urls];
   }
-  urls = [...new Set(urls.map((u) => u.replace(/\/$/, "") || origin))].slice(0, SITE_AUDIT_MAX_PAGES);
+  urls = [...new Set(urls.map((u) => u.replace(/\/$/, "") || origin))].slice(0, maxPages);
 
   const totalDiscovered = Math.max(siteContext.sitemapUrls.length, urls.length);
   const totalToAudit = urls.length;
@@ -286,7 +289,7 @@ export async function runExtensiveSiteAudit(website, { dataForSeo, apiKey, model
     auditedAt: new Date().toISOString(),
     pageCount: pages.length,
     totalDiscovered,
-    auditCap: SITE_AUDIT_MAX_PAGES,
+    auditCap: maxPages,
     siteScore,
     avgPageScore,
     offPageScore: offPage.score,

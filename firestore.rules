@@ -34,6 +34,13 @@ service cloud.firestore {
     match /projectRegistry/{userId} {
       allow read, write: if false;
     }
+    // Team project sharing: membership and invite links are managed by the server only.
+    match /sharedProjects/{shareId} {
+      allow read, write: if false;
+    }
+    match /projectInvites/{tokenHash} {
+      allow read, write: if false;
+    }
     // Public share pages: anyone can read, but the document must not carry the owner's user ID.
     match /sharedChats/{shareId} {
       allow read: if true;

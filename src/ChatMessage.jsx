@@ -30,11 +30,13 @@ export function ChatMessage({
   lastUserMessage,
   onEditUserMessage,
   editUserDisabled,
+  showAuthor,
 }) {
   if (message.role === "user") {
     return (
       <UserMessage
         message={message}
+        authorLabel={showAuthor && message.author?.name ? (message.author.uid === feedbackUid ? "You" : message.author.name) : ""}
         messageIndex={messageIndex}
         onEditUserMessage={onEditUserMessage}
         editDisabled={editUserDisabled}
@@ -227,7 +229,6 @@ export function ChatMessage({
                 onAction?.(action.message);
               }}
             >
-              {action.variant === "secondary" && <RefreshIcon />}
               {action.label.replace(/\s*→\s*$/, "")}
               {action.variant === "primary" && <span aria-hidden="true">→</span>}
             </button>
@@ -536,19 +537,16 @@ function ChatSteps({ items, animate }) {
         {items.map((item, index) => {
           const label = typeof item === "string" ? item : item.text;
           const state = typeof item === "string" ? null : item.state;
-          const done = state === "done" || (!state && index < visible);
+          const done = state === "done" || state === "active" || (!state && index < visible);
           const pending = state === "pending" || (!state && animate && index >= visible);
-          const active = state === "active";
           return (
             <li
               key={`${label}-${index}`}
-              className={done ? "is-done" : active ? "is-active" : pending ? "is-pending" : ""}
+              className={done ? "is-done" : pending ? "is-pending" : ""}
             >
               <span className="chat-step-icon" aria-hidden="true">
                 {done ? (
                   <StepCheckIcon />
-                ) : active ? (
-                  <span className="chat-step-spinner" />
                 ) : (
                   <span className="chat-step-dot" />
                 )}
@@ -643,7 +641,7 @@ export function AssistantBody({ content }) {
   );
 }
 
-function UserMessage({ message, messageIndex, onEditUserMessage, editDisabled }) {
+function UserMessage({ message, messageIndex, onEditUserMessage, editDisabled, authorLabel }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content || "");
   const images = (message.attachments || []).filter((item) => item.type === "image");
@@ -707,6 +705,14 @@ function UserMessage({ message, messageIndex, onEditUserMessage, editDisabled })
 
   return (
     <div className="chat-user-wrap">
+      {authorLabel ? (
+        <span className="chat-user-author">
+          <span className="chat-user-author-avatar" aria-hidden="true">
+            {authorLabel.charAt(0).toUpperCase()}
+          </span>
+          {authorLabel}
+        </span>
+      ) : null}
       <article className="chat-msg is-user">
         {images.length > 0 && (
           <div className="chat-user-attachments">
@@ -770,20 +776,6 @@ function StepCheckIcon() {
         className="chat-step-check-mark"
         d="M5.5 9.2 7.8 11.5 12.5 6.5"
         strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function RefreshIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <path
-        d="M14.5 9a5.5 5.5 0 1 1-1.6-3.9M14.5 4.5V9h-4.5"
-        stroke="currentColor"
-        strokeWidth="1.3"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

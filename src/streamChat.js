@@ -34,17 +34,18 @@ export async function streamAssistantReply({ history, context, onDelta }) {
         if (!line.startsWith("data:")) continue;
         const payload = line.slice(5).trim();
         if (!payload || payload === "[DONE]") continue;
+        let event;
         try {
-          const event = JSON.parse(payload);
-          if (event.type === "error") {
-            throw new Error(event.error || "Blazly could not reply.");
-          }
-          if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
-            text += event.delta.text || "";
-            onDelta?.(text);
-          }
+          event = JSON.parse(payload);
         } catch {
-          // Ignore malformed stream frames.
+          continue;
+        }
+        if (event.type === "error") {
+          throw new Error(event.error?.message || event.error || "Blazly could not reply.");
+        }
+        if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+          text += event.delta.text || "";
+          onDelta?.(text);
         }
       }
     }

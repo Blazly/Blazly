@@ -1,6 +1,7 @@
 import { readJson as sharedReadJson } from "./readJson.js";
 import crypto from "crypto";
 import { adminAuth } from "./firebaseAdmin.js";
+import { BUSINESS_EMAIL_MESSAGE, isPersonalEmail } from "../src/businessEmail.js";
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 60 * 1000;
@@ -116,6 +117,7 @@ export async function sendOtp(req, { email, name }, purpose = "verify") {
   const now = Date.now();
   prune(now);
   const address = normalizeEmail(email);
+  if (purpose === "verify" && isPersonalEmail(address)) throw fail(BUSINESS_EMAIL_MESSAGE);
   const slot = `${purpose}:${address}`;
   const firstName = String(name || "").trim().split(/\s+/)[0]?.slice(0, 40) || "";
   const ip = clientIp(req);

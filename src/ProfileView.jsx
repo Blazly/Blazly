@@ -20,6 +20,7 @@ function normalizeLinkedInUrl(raw) {
 export function ProfileView({
   notice,
   onUpgrade,
+  onOpenProjects,
   displayName,
   email,
   initial,
@@ -244,7 +245,7 @@ export function ProfileView({
         </section>
 
         {notice && <div className={`pricing-notice is-${notice.tone}`}>{notice.text}</div>}
-        <TeamCard onUpgrade={onUpgrade} />
+        <TeamCard onUpgrade={onUpgrade} onOpenProjects={onOpenProjects} />
 
         <ReferralCard />
 

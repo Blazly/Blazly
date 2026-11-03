@@ -1,9 +1,10 @@
+import { auditPageLimit } from "../../src/plans.js";
+
 /** 1 credit ≈ $0.01 of provider cost (AI tokens + data APIs + media). */
 export const FREE_STARTING_CREDITS = 500;
 
 const SITE_AUDIT_BASE = 10;
 const SITE_AUDIT_PER_PAGE = 5;
-const SITE_AUDIT_MAX_PAGES = 100;
 const BLOG_STANDARD = 30;
 const BLOG_MAX = 100;
 const HUMANIZE_PER_2000_WORDS = 10;
@@ -51,12 +52,11 @@ export const AGENT_PRICING = {
   "/api/site-audit": {
     agent: "site-audit",
     label: "Site Audit",
-    reserve: () => SITE_AUDIT_BASE + SITE_AUDIT_PER_PAGE * SITE_AUDIT_MAX_PAGES,
+    reserve: (plan) => SITE_AUDIT_BASE + SITE_AUDIT_PER_PAGE * auditPageLimit(plan),
     minimum: SITE_AUDIT_BASE + SITE_AUDIT_PER_PAGE,
     settle: (event, reserved) => {
       const pages = Number(event?.report?.pageCount);
       return Number.isFinite(pages) ? Math.min(reserved, SITE_AUDIT_BASE + SITE_AUDIT_PER_PAGE * Math.max(0, pages)) : reserved;
     },
   },
-  "/api/reels-creation": { agent: "reels-creation", label: "Reels", reserve: () => 400 },
 };

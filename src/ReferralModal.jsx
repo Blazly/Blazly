@@ -19,12 +19,12 @@ export function ReferralModal({ open, onClose }) {
         </button>
         <div className="referral-modal-hero">
           <span className="referral-modal-gift">🎁</span>
-          <h2>Give Blazly, get 100 credits</h2>
-          <p>Every friend who signs up with your link adds 100 free credits to your balance. No limit.</p>
+          <h2>Give Blazly, get 250 credits</h2>
+          <p>Every friend who signs up with your link and buys a paid plan adds 250 free credits to your balance. No limit.</p>
           <ol className="referral-steps">
             <li><strong>1</strong> Copy your link</li>
-            <li><strong>2</strong> A friend signs up</li>
-            <li><strong>3</strong> You get +100 credits</li>
+            <li><strong>2</strong> A friend signs up and upgrades</li>
+            <li><strong>3</strong> You get +250 credits</li>
           </ol>
         </div>
         <ReferralCard />

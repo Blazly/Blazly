@@ -1,4 +1,4 @@
-const LOGO_SRC = "/assets/logo.webp";
+const LOGO_SRC = "/assets/logo.png";
 
 /** Product logo. `size` sets the rendered mark size in px. */
 export function BrandLogo({ className = "", size = 32, withText = false }) {
